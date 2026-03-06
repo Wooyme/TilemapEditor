@@ -1,0 +1,107 @@
+"use client"
+
+import React, { useState, useRef, useEffect } from 'react'
+import { GridCell, Tileset, TilePosition } from '@/hooks/use-tile-editor'
+import { cn } from '@/lib/utils'
+
+interface TileCanvasProps {
+  grid: GridCell[][]
+  tilesets: Tileset[]
+  canvasSize: { width: number; height: number }
+  tileSize: { width: number; height: number }
+  onPaint: (x: number, y: number) => void
+  activeTool: 'paint' | 'eraser'
+  selectedTile: TilePosition | null
+}
+
+export function TileCanvas({ grid, tilesets, canvasSize, tileSize, onPaint, activeTool, selectedTile }: TileCanvasProps) {
+  const [isMouseDown, setIsMouseDown] = useState(false)
+  const canvasRef = useRef<HTMLDivElement>(null)
+
+  const handleMouseMove = (x: number, y: number) => {
+    if (isMouseDown) {
+      onPaint(x, y)
+    }
+  }
+
+  const handleMouseDown = (x: number, y: number) => {
+    setIsMouseDown(true)
+    onPaint(x, y)
+  }
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => setIsMouseDown(false)
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp)
+  }, [])
+
+  return (
+    <div className="flex-1 flex items-center justify-center bg-secondary overflow-auto p-8 border-l border-r">
+      <div 
+        ref={canvasRef}
+        className="relative bg-white shadow-xl select-none"
+        style={{
+          width: canvasSize.width * tileSize.width,
+          height: canvasSize.height * tileSize.height,
+        }}
+      >
+        {/* Grid Background */}
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: `linear-gradient(to right, #ccc 1px, transparent 1px), linear-gradient(to bottom, #ccc 1px, transparent 1px)`,
+            backgroundSize: `${tileSize.width}px ${tileSize.height}px`
+          }}
+        />
+
+        {/* Tiles Layer */}
+        {grid.map((row, y) => 
+          row.map((cell, x) => {
+            if (!cell) return null
+            const ts = tilesets.find(t => t.id === cell.tilesetId)
+            if (!ts) return null
+            return (
+              <div
+                key={`${x}-${y}`}
+                className="absolute"
+                style={{
+                  left: x * tileSize.width,
+                  top: y * tileSize.height,
+                  width: tileSize.width,
+                  height: tileSize.height,
+                  backgroundImage: `url(${ts.url})`,
+                  backgroundPosition: `-${cell.tx * tileSize.width}px -${cell.ty * tileSize.height}px`,
+                  backgroundRepeat: 'no-repeat'
+                }}
+              />
+            )
+          })
+        )}
+
+        {/* Interaction Layer */}
+        <div 
+          className="absolute inset-0 grid"
+          style={{
+            gridTemplateColumns: `repeat(${canvasSize.width}, ${tileSize.width}px)`,
+            gridTemplateRows: `repeat(${canvasSize.height}, ${tileSize.height}px)`,
+          }}
+        >
+          {Array.from({ length: canvasSize.width * canvasSize.height }).map((_, i) => {
+            const x = i % canvasSize.width
+            const y = Math.floor(i / canvasSize.width)
+            return (
+              <div
+                key={i}
+                onMouseDown={() => handleMouseDown(x, y)}
+                onMouseEnter={() => handleMouseMove(x, y)}
+                className={cn(
+                  "border border-transparent hover:border-accent/50 hover:bg-accent/10 transition-colors cursor-crosshair",
+                )}
+              />
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}

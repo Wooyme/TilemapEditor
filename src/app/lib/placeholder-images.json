@@ -1,0 +1,10 @@
+{
+  "placeholderImages": [
+    {
+      "id": "tileset-demo",
+      "description": "A demo RPG tileset",
+      "imageUrl": "https://picsum.photos/seed/tileset/512/512",
+      "imageHint": "tileset texture"
+    }
+  ]
+}
