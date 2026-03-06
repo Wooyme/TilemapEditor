@@ -1,11 +1,12 @@
 "use client"
 
 import React, { useState, useRef, useEffect } from 'react'
-import { GridCell, Tileset, TileSelection } from '@/hooks/use-tile-editor'
+import { Layer, Tileset, TileSelection } from '@/hooks/use-tile-editor'
 import { cn } from '@/lib/utils'
 
 interface TileCanvasProps {
-  grid: GridCell[][]
+  layers: Layer[]
+  activeLayerId: string
   tilesets: Tileset[]
   canvasSize: { width: number; height: number }
   tileSize: { width: number; height: number }
@@ -17,7 +18,8 @@ interface TileCanvasProps {
 }
 
 export function TileCanvas({ 
-  grid, 
+  layers,
+  activeLayerId,
   tilesets, 
   canvasSize, 
   tileSize, 
@@ -80,36 +82,49 @@ export function TileCanvas({
           }}
         />
 
-        {/* Tiles Layer */}
+        {/* Layers Rendering - Render in reverse because layers[0] is top */}
         <div className="absolute inset-0 pointer-events-none">
-          {grid.map((row, y) => 
-            row.map((cell, x) => {
-              if (!cell) return null
-              const ts = tilesets.find(t => t.id === cell.tilesetId)
-              if (!ts) return null
-              return (
-                <div
-                  key={`${x}-${y}`}
-                  className="absolute"
-                  style={{
-                    left: x * tileSize.width,
-                    top: y * tileSize.height,
-                    width: tileSize.width,
-                    height: tileSize.height,
-                    backgroundImage: `url(${ts.url})`,
-                    backgroundPosition: `-${cell.tx * tileSize.width}px -${cell.ty * tileSize.height}px`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundSize: `${ts.width}px ${ts.height}px`
-                  }}
-                />
-              )
-            })
-          )}
+          {[...layers].reverse().map((layer) => {
+            if (!layer.visible) return null
+            return (
+              <div 
+                key={layer.id} 
+                className={cn(
+                  "absolute inset-0",
+                  layer.id !== activeLayerId && "opacity-80"
+                )}
+              >
+                {layer.data.map((row, y) => 
+                  row.map((cell, x) => {
+                    if (!cell) return null
+                    const ts = tilesets.find(t => t.id === cell.tilesetId)
+                    if (!ts) return null
+                    return (
+                      <div
+                        key={`${layer.id}-${x}-${y}`}
+                        className="absolute"
+                        style={{
+                          left: x * tileSize.width,
+                          top: y * tileSize.height,
+                          width: tileSize.width,
+                          height: tileSize.height,
+                          backgroundImage: `url(${ts.url})`,
+                          backgroundPosition: `-${cell.tx * tileSize.width}px -${cell.ty * tileSize.height}px`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundSize: `${ts.width}px ${ts.height}px`
+                        }}
+                      />
+                    )
+                  })
+                )}
+              </div>
+            )
+          })}
         </div>
 
         {/* Preview Ghost Layer */}
         {hoverPos && selection && activeTool === 'paint' && (
-          <div className="absolute inset-0 pointer-events-none opacity-50">
+          <div className="absolute inset-0 pointer-events-none opacity-50 z-50">
              {Array.from({ length: selection.h }).map((_, i) => (
                 Array.from({ length: selection.w }).map((_, j) => {
                   const x = hoverPos.x + j
@@ -140,7 +155,7 @@ export function TileCanvas({
 
         {/* Interaction Layer */}
         <div 
-          className="absolute inset-0 grid"
+          className="absolute inset-0 grid z-[60]"
           style={{
             gridTemplateColumns: `repeat(${canvasSize.width}, ${tileSize.width}px)`,
             gridTemplateRows: `repeat(${canvasSize.height}, ${tileSize.height}px)`,

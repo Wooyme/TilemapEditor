@@ -21,9 +21,15 @@ import {
   Maximize,
   Image as LucideImage,
   X,
-  Square
+  Layers,
+  Eye,
+  EyeOff,
+  Plus,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
+import { cn } from '@/lib/utils'
 
 export default function TileForge() {
   const {
@@ -39,7 +45,13 @@ export default function TileForge() {
     setTileSize,
     canvasSize,
     setCanvasSize,
-    grid,
+    layers,
+    activeLayerId,
+    setActiveLayerId,
+    addLayer,
+    removeLayer,
+    toggleLayerVisibility,
+    moveLayer,
     paintTile,
     activeTool,
     setActiveTool,
@@ -99,6 +111,70 @@ export default function TileForge() {
               >
                 <Eraser size={16} /> Eraser
               </Button>
+            </div>
+          </section>
+
+          <Separator />
+
+          {/* Layer Management */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs uppercase text-muted-foreground font-semibold">Layers</Label>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={addLayer}>
+                <Plus size={14} />
+              </Button>
+            </div>
+            
+            <div className="space-y-1">
+              {layers.map((layer, index) => (
+                <div 
+                  key={layer.id}
+                  className={cn(
+                    "group flex items-center gap-2 p-2 rounded-md transition-colors",
+                    activeLayerId === layer.id ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-secondary/50"
+                  )}
+                  onClick={() => setActiveLayerId(layer.id)}
+                >
+                  <button 
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
+                  >
+                    {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </button>
+                  
+                  <span className={cn(
+                    "flex-1 text-xs truncate cursor-pointer",
+                    activeLayerId === layer.id ? "font-semibold text-primary" : "text-muted-foreground"
+                  )}>
+                    {layer.name}
+                  </span>
+
+                  <div className="hidden group-hover:flex items-center gap-1">
+                    <button 
+                      className="p-1 hover:bg-secondary rounded"
+                      disabled={index === 0}
+                      onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'up'); }}
+                    >
+                      <ChevronUp size={12} />
+                    </button>
+                    <button 
+                      className="p-1 hover:bg-secondary rounded"
+                      disabled={index === layers.length - 1}
+                      onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 'down'); }}
+                    >
+                      <ChevronDown size={12} />
+                    </button>
+                    {layers.length > 1 && (
+                      <button 
+                        className="p-1 hover:bg-destructive/10 text-destructive rounded"
+                        onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
@@ -280,7 +356,7 @@ export default function TileForge() {
 
         <div className="mt-auto p-4 border-t space-y-2">
            <Button variant="outline" className="w-full text-destructive border-destructive/20 hover:bg-destructive/10" onClick={clearCanvas}>
-            <Trash2 size={16} className="mr-2" /> Clear Canvas
+            <Trash2 size={16} className="mr-2" /> Clear All Layers
           </Button>
         </div>
       </aside>
@@ -297,6 +373,10 @@ export default function TileForge() {
                <Maximize size={16} />
                <span>{tileSize.width}x{tileSize.height}px</span>
              </div>
+             <div className="flex items-center gap-1">
+               <Layers size={16} />
+               <span>{layers.length} Layers</span>
+             </div>
           </div>
           
           <div className="flex gap-2">
@@ -310,7 +390,8 @@ export default function TileForge() {
         </header>
 
         <TileCanvas 
-          grid={grid}
+          layers={layers}
+          activeLayerId={activeLayerId}
           tilesets={tilesets}
           canvasSize={canvasSize}
           tileSize={tileSize}

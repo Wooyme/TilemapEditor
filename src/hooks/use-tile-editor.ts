@@ -26,6 +26,13 @@ export type TileSelection = {
 
 export type GridCell = TilePosition | null
 
+export type Layer = {
+  id: string
+  name: string
+  visible: boolean
+  data: GridCell[][]
+}
+
 export type Tool = 'paint' | 'eraser'
 export type SelectionMode = 'single' | 'multi'
 
@@ -37,24 +44,32 @@ export function useTileEditor() {
   
   const [tileSize, setTileSize] = useState({ width: 32, height: 32 })
   const [canvasSize, setCanvasSize] = useState({ width: 20, height: 15 })
-  const [grid, setGrid] = useState<GridCell[][]>([])
+  
+  // Multi-layer state
+  const [layers, setLayers] = useState<Layer[]>([
+    { id: 'layer-1', name: 'Layer 1', visible: true, data: [] }
+  ])
+  const [activeLayerId, setActiveLayerId] = useState<string>('layer-1')
+
   const [activeTool, setActiveTool] = useState<Tool>('paint')
 
   // Background Image State
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5)
 
-  // Initialize/Update grid on size change
+  // Sync layer data with canvas size
   useEffect(() => {
-    setGrid(prev => {
-      const newGrid: GridCell[][] = Array(canvasSize.height)
-        .fill(null)
-        .map((_, y) => 
-          Array(canvasSize.width)
-            .fill(null)
-            .map((_, x) => (prev[y] && prev[y][x]) || null)
-        )
-      return newGrid
+    setLayers(prev => {
+      return prev.map(layer => {
+        const newData = Array(canvasSize.height)
+          .fill(null)
+          .map((_, y) => 
+            Array(canvasSize.width)
+              .fill(null)
+              .map((_, x) => (layer.data[y] && layer.data[y][x]) || null)
+          )
+        return { ...layer, data: newData }
+      })
     })
   }, [canvasSize.width, canvasSize.height])
 
@@ -98,43 +113,83 @@ export function useTileEditor() {
   }, [])
 
   const paintTile = useCallback((x: number, y: number) => {
-    if (activeTool === 'eraser') {
-      setGrid(prev => {
-        const next = [...prev]
-        if (next[y]) {
-          next[y] = [...next[y]]
-          next[y][x] = null
-        }
-        return next
-      })
-    } else if (selection) {
-      setGrid(prev => {
-        const next = [...prev]
-        // Iterate through the selection width and height to stamp the block
-        for (let i = 0; i < selection.h; i++) {
-          const targetY = y + i
-          if (targetY >= canvasSize.height) continue
-          
-          next[targetY] = [...(next[targetY] || [])]
-          
-          for (let j = 0; j < selection.w; j++) {
-            const targetX = x + j
-            if (targetX >= canvasSize.width) continue
+    setLayers(prev => {
+      return prev.map(layer => {
+        if (layer.id !== activeLayerId) return layer
+        
+        const nextData = [...layer.data]
+        if (activeTool === 'eraser') {
+          if (nextData[y]) {
+            nextData[y] = [...nextData[y]]
+            nextData[y][x] = null
+          }
+        } else if (selection) {
+          for (let i = 0; i < selection.h; i++) {
+            const targetY = y + i
+            if (targetY >= canvasSize.height) continue
             
-            next[targetY][targetX] = {
-              tilesetId: selection.tilesetId,
-              tx: selection.tx + j,
-              ty: selection.ty + i
+            nextData[targetY] = [...(nextData[targetY] || [])]
+            
+            for (let j = 0; j < selection.w; j++) {
+              const targetX = x + j
+              if (targetX >= canvasSize.width) continue
+              
+              nextData[targetY][targetX] = {
+                tilesetId: selection.tilesetId,
+                tx: selection.tx + j,
+                ty: selection.ty + i
+              }
             }
           }
         }
-        return next
+        return { ...layer, data: nextData }
       })
+    })
+  }, [selection, activeTool, activeLayerId, canvasSize.width, canvasSize.height])
+
+  const addLayer = useCallback(() => {
+    const newLayer: Layer = {
+      id: crypto.randomUUID(),
+      name: `Layer ${layers.length + 1}`,
+      visible: true,
+      data: Array(canvasSize.height).fill(null).map(() => Array(canvasSize.width).fill(null))
     }
-  }, [selection, activeTool, canvasSize.width, canvasSize.height])
+    setLayers(prev => [newLayer, ...prev])
+    setActiveLayerId(newLayer.id)
+  }, [layers.length, canvasSize])
+
+  const removeLayer = useCallback((id: string) => {
+    if (layers.length <= 1) return
+    setLayers(prev => prev.filter(l => l.id !== id))
+    if (activeLayerId === id) {
+      setActiveLayerId(layers.find(l => l.id !== id)?.id || '')
+    }
+  }, [layers, activeLayerId])
+
+  const toggleLayerVisibility = useCallback((id: string) => {
+    setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l))
+  }, [])
+
+  const moveLayer = useCallback((id: string, direction: 'up' | 'down') => {
+    setLayers(prev => {
+      const index = prev.findIndex(l => l.id === id)
+      if (index === -1) return prev
+      if (direction === 'up' && index === 0) return prev
+      if (direction === 'down' && index === prev.length - 1) return prev
+      
+      const next = [...prev]
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      const [moved] = next.splice(index, 1)
+      next.splice(targetIndex, 0, moved)
+      return next
+    })
+  }, [])
 
   const clearCanvas = useCallback(() => {
-    setGrid(Array(canvasSize.height).fill(null).map(() => Array(canvasSize.width).fill(null)))
+    setLayers(prev => prev.map(layer => ({
+      ...layer,
+      data: Array(canvasSize.height).fill(null).map(() => Array(canvasSize.width).fill(null))
+    })))
   }, [canvasSize])
 
   const exportJson = useCallback(() => {
@@ -143,7 +198,7 @@ export function useTileEditor() {
       tileSize,
       canvasSize,
       tilesets: tilesets.map(t => ({ name: t.name, id: t.id })),
-      layers: [grid],
+      layers: layers.map(l => ({ name: l.name, data: l.data })),
       background: backgroundImage ? { opacity: backgroundOpacity } : null
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -152,7 +207,7 @@ export function useTileEditor() {
     a.href = url
     a.download = 'tilemap.json'
     a.click()
-  }, [grid, tileSize, canvasSize, tilesets, backgroundImage, backgroundOpacity])
+  }, [layers, tileSize, canvasSize, tilesets, backgroundImage, backgroundOpacity])
 
   const exportPng = useCallback(async () => {
     const canvas = document.createElement('canvas')
@@ -180,19 +235,22 @@ export function useTileEditor() {
       images[ts.id] = img
     }
 
-    // Draw tiles
-    grid.forEach((row, y) => {
-      row.forEach((cell, x) => {
-        if (cell) {
-          const img = images[cell.tilesetId]
-          if (img) {
-            ctx.drawImage(
-              img,
-              cell.tx * tileSize.width, cell.ty * tileSize.height, tileSize.width, tileSize.height,
-              x * tileSize.width, y * tileSize.height, tileSize.width, tileSize.height
-            )
+    // Draw tiles (reverse order because layers[0] is top)
+    [...layers].reverse().forEach(layer => {
+      if (!layer.visible) return
+      layer.data.forEach((row, y) => {
+        row.forEach((cell, x) => {
+          if (cell) {
+            const img = images[cell.tilesetId]
+            if (img) {
+              ctx.drawImage(
+                img,
+                cell.tx * tileSize.width, cell.ty * tileSize.height, tileSize.width, tileSize.height,
+                x * tileSize.width, y * tileSize.height, tileSize.width, tileSize.height
+              )
+            }
           }
-        }
+        })
       })
     })
 
@@ -201,7 +259,7 @@ export function useTileEditor() {
     a.href = dataUrl
     a.download = 'tilemap.png'
     a.click()
-  }, [grid, canvasSize, tileSize, tilesets, backgroundImage, backgroundOpacity])
+  }, [layers, canvasSize, tileSize, tilesets, backgroundImage, backgroundOpacity])
 
   return {
     tilesets,
@@ -216,7 +274,13 @@ export function useTileEditor() {
     setTileSize,
     canvasSize,
     setCanvasSize,
-    grid,
+    layers,
+    activeLayerId,
+    setActiveLayerId,
+    addLayer,
+    removeLayer,
+    toggleLayerVisibility,
+    moveLayer,
     paintTile,
     activeTool,
     setActiveTool,
