@@ -15,7 +15,7 @@ import {
   Paintbrush, 
   Eraser, 
   Grid3X3, 
-  Image as ImageIcon,
+  ImageIcon,
   Save,
   Trash2,
   Maximize
@@ -55,7 +55,7 @@ export default function TileForge() {
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-body text-foreground">
       {/* Left Sidebar - Tools & Tilesets */}
-      <aside className="w-80 flex flex-col border-r bg-white shadow-sm overflow-y-auto">
+      <aside className="w-80 shrink-0 flex flex-col border-r bg-white shadow-sm overflow-y-auto">
         <header className="p-4 border-b flex items-center gap-2">
           <div className="p-2 bg-primary rounded-lg text-white">
             <Maximize size={20} />
@@ -183,8 +183,8 @@ export default function TileForge() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col relative">
-        <header className="h-14 border-b bg-white flex items-center justify-between px-6">
+      <main className="flex-1 min-w-0 flex flex-col relative">
+        <header className="h-14 border-b bg-white flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
              <div className="flex items-center gap-1">
                <Grid3X3 size={16} /> 
