@@ -44,6 +44,7 @@ export function useTileEditor() {
   
   const [tileSize, setTileSize] = useState({ width: 32, height: 32 })
   const [canvasSize, setCanvasSize] = useState({ width: 20, height: 15 })
+  const [zoom, setZoom] = useState(1)
   
   // Multi-layer state
   const [layers, setLayers] = useState<Layer[]>([
@@ -274,6 +275,8 @@ export function useTileEditor() {
     setTileSize,
     canvasSize,
     setCanvasSize,
+    zoom,
+    setZoom,
     layers,
     activeLayerId,
     setActiveLayerId,

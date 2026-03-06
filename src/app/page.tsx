@@ -26,7 +26,10 @@ import {
   EyeOff,
   Plus,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  ZoomIn,
+  ZoomOut,
+  Search
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
@@ -45,6 +48,8 @@ export default function TileForge() {
     setTileSize,
     canvasSize,
     setCanvasSize,
+    zoom,
+    setZoom,
     layers,
     activeLayerId,
     setActiveLayerId,
@@ -112,6 +117,42 @@ export default function TileForge() {
                 <Eraser size={16} /> Eraser
               </Button>
             </div>
+          </section>
+
+          <Separator />
+
+          {/* View / Zoom Settings */}
+          <section className="space-y-3">
+             <Label className="text-xs uppercase text-muted-foreground font-semibold">View Options</Label>
+             <div className="space-y-2 p-3 border rounded-md bg-secondary/10">
+                <div className="flex justify-between items-center mb-1">
+                  <Label className="text-[10px]">Zoom Level</Label>
+                  <span className="text-[10px] font-mono">{Math.round(zoom * 100)}%</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setZoom(Math.max(0.25, zoom - 0.25))} className="p-1 hover:bg-secondary rounded">
+                    <ZoomOut size={14} className="text-muted-foreground" />
+                  </button>
+                  <Slider 
+                    value={[zoom]} 
+                    min={0.25} 
+                    max={4} 
+                    step={0.05} 
+                    onValueChange={([val]) => setZoom(val)} 
+                  />
+                  <button onClick={() => setZoom(Math.min(4, zoom + 0.25))} className="p-1 hover:bg-secondary rounded">
+                    <ZoomIn size={14} className="text-muted-foreground" />
+                  </button>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full h-7 text-[10px] gap-1"
+                  onClick={() => setZoom(1)}
+                >
+                  <Search size={12} /> Reset to 100%
+                </Button>
+             </div>
           </section>
 
           <Separator />
@@ -377,6 +418,11 @@ export default function TileForge() {
                <Layers size={16} />
                <span>{layers.length} Layers</span>
              </div>
+             <div className="h-4 w-px bg-border mx-1" />
+             <div className="flex items-center gap-1 font-mono text-[11px] bg-secondary/30 px-2 py-0.5 rounded">
+               <Search size={14} />
+               <span>{Math.round(zoom * 100)}%</span>
+             </div>
           </div>
           
           <div className="flex gap-2">
@@ -395,6 +441,7 @@ export default function TileForge() {
           tilesets={tilesets}
           canvasSize={canvasSize}
           tileSize={tileSize}
+          zoom={zoom}
           onPaint={paintTile}
           activeTool={activeTool}
           selection={selection}
