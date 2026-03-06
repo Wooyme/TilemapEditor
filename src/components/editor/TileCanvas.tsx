@@ -12,9 +12,21 @@ interface TileCanvasProps {
   onPaint: (x: number, y: number) => void
   activeTool: 'paint' | 'eraser'
   selectedTile: TilePosition | null
+  backgroundImage?: string | null
+  backgroundOpacity?: number
 }
 
-export function TileCanvas({ grid, tilesets, canvasSize, tileSize, onPaint, activeTool, selectedTile }: TileCanvasProps) {
+export function TileCanvas({ 
+  grid, 
+  tilesets, 
+  canvasSize, 
+  tileSize, 
+  onPaint, 
+  activeTool, 
+  selectedTile,
+  backgroundImage,
+  backgroundOpacity = 0.5
+}: TileCanvasProps) {
   const [isMouseDown, setIsMouseDown] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -45,6 +57,17 @@ export function TileCanvas({ grid, tilesets, canvasSize, tileSize, onPaint, acti
           height: canvasSize.height * tileSize.height,
         }}
       >
+        {/* Background Image Layer */}
+        {backgroundImage && (
+          <div 
+            className="absolute inset-0 pointer-events-none bg-cover bg-center"
+            style={{
+              backgroundImage: `url(${backgroundImage})`,
+              opacity: backgroundOpacity,
+            }}
+          />
+        )}
+
         {/* Grid Background */}
         <div 
           className="absolute inset-0 pointer-events-none"
@@ -55,28 +78,31 @@ export function TileCanvas({ grid, tilesets, canvasSize, tileSize, onPaint, acti
         />
 
         {/* Tiles Layer */}
-        {grid.map((row, y) => 
-          row.map((cell, x) => {
-            if (!cell) return null
-            const ts = tilesets.find(t => t.id === cell.tilesetId)
-            if (!ts) return null
-            return (
-              <div
-                key={`${x}-${y}`}
-                className="absolute"
-                style={{
-                  left: x * tileSize.width,
-                  top: y * tileSize.height,
-                  width: tileSize.width,
-                  height: tileSize.height,
-                  backgroundImage: `url(${ts.url})`,
-                  backgroundPosition: `-${cell.tx * tileSize.width}px -${cell.ty * tileSize.height}px`,
-                  backgroundRepeat: 'no-repeat'
-                }}
-              />
-            )
-          })
-        )}
+        <div className="absolute inset-0 pointer-events-none">
+          {grid.map((row, y) => 
+            row.map((cell, x) => {
+              if (!cell) return null
+              const ts = tilesets.find(t => t.id === cell.tilesetId)
+              if (!ts) return null
+              return (
+                <div
+                  key={`${x}-${y}`}
+                  className="absolute"
+                  style={{
+                    left: x * tileSize.width,
+                    top: y * tileSize.height,
+                    width: tileSize.width,
+                    height: tileSize.height,
+                    backgroundImage: `url(${ts.url})`,
+                    backgroundPosition: `-${cell.tx * tileSize.width}px -${cell.ty * tileSize.height}px`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundSize: `${ts.width}px ${ts.height}px`
+                  }}
+                />
+              )
+            })
+          )}
+        </div>
 
         {/* Interaction Layer */}
         <div 

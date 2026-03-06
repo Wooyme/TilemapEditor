@@ -7,8 +7,8 @@ import { TileCanvas } from '@/components/editor/TileCanvas'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Slider } from '@/components/ui/slider'
 import { 
   Upload, 
   Download, 
@@ -18,7 +18,9 @@ import {
   ImageIcon,
   Save,
   Trash2,
-  Maximize
+  Maximize,
+  Image as LucideImage,
+  X
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -40,15 +42,27 @@ export default function TileForge() {
     setActiveTool,
     clearCanvas,
     exportJson,
-    exportPng
+    exportPng,
+    backgroundImage,
+    setBackgroundImage,
+    removeBackgroundImage,
+    backgroundOpacity,
+    setBackgroundOpacity
   } = useTileEditor()
 
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTilesetUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       addTileset(file)
+    }
+  }
+
+  const handleBackgroundUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setBackgroundImage(file)
     }
   }
 
@@ -87,6 +101,59 @@ export default function TileForge() {
 
           <Separator />
 
+          {/* Background Image Settings */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs uppercase text-muted-foreground font-semibold">Background Image</Label>
+              {!backgroundImage ? (
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
+                  <label className="cursor-pointer">
+                    <Upload size={14} />
+                    <input type="file" className="hidden" accept="image/*" onChange={handleBackgroundUpload} />
+                  </label>
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={removeBackgroundImage}>
+                  <X size={14} />
+                </Button>
+              )}
+            </div>
+
+            {backgroundImage ? (
+              <div className="space-y-3 p-3 border rounded-md bg-secondary/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded bg-muted overflow-hidden">
+                    <img src={backgroundImage} alt="Background" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-xs font-medium truncate">Reference Image</p>
+                    <p className="text-[10px] text-muted-foreground">Adjust transparency below</p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between">
+                    <Label className="text-[10px]">Opacity</Label>
+                    <span className="text-[10px] font-mono">{Math.round(backgroundOpacity * 100)}%</span>
+                  </div>
+                  <Slider 
+                    value={[backgroundOpacity]} 
+                    min={0} 
+                    max={1} 
+                    step={0.01} 
+                    onValueChange={([val]) => setBackgroundOpacity(val)} 
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed rounded-lg p-4 text-center text-[10px] text-muted-foreground">
+                <LucideImage className="mx-auto mb-1 opacity-20" size={24} />
+                Upload a reference image
+              </div>
+            )}
+          </section>
+
+          <Separator />
+
           {/* Tileset Management */}
           <section className="space-y-3">
             <div className="flex items-center justify-between">
@@ -94,7 +161,7 @@ export default function TileForge() {
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild>
                 <label className="cursor-pointer">
                   <Upload size={14} />
-                  <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                  <input type="file" className="hidden" accept="image/*" onChange={handleTilesetUpload} />
                 </label>
               </Button>
             </div>
@@ -214,6 +281,8 @@ export default function TileForge() {
           onPaint={paintTile}
           activeTool={activeTool}
           selectedTile={selectedTile}
+          backgroundImage={backgroundImage}
+          backgroundOpacity={backgroundOpacity}
         />
       </main>
       <Toaster />

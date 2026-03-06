@@ -30,6 +30,10 @@ export function useTileEditor() {
   const [grid, setGrid] = useState<GridCell[][]>([])
   const [activeTool, setActiveTool] = useState<Tool>('paint')
 
+  // Background Image State
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
+  const [backgroundOpacity, setBackgroundOpacity] = useState(0.5)
+
   // Initialize/Update grid on size change
   useEffect(() => {
     setGrid(prev => {
@@ -62,6 +66,21 @@ export function useTileEditor() {
     }
     img.src = url
   }, [selectedTilesetId])
+
+  const handleSetBackgroundImage = useCallback((file: File) => {
+    if (backgroundImage) {
+      URL.revokeObjectURL(backgroundImage)
+    }
+    const url = URL.createObjectURL(file)
+    setBackgroundImage(url)
+  }, [backgroundImage])
+
+  const removeBackgroundImage = useCallback(() => {
+    if (backgroundImage) {
+      URL.revokeObjectURL(backgroundImage)
+    }
+    setBackgroundImage(null)
+  }, [backgroundImage])
 
   const selectTile = useCallback((tilesetId: string, tx: number, ty: number) => {
     setSelectedTile({ tilesetId, tx, ty })
@@ -96,7 +115,8 @@ export function useTileEditor() {
       tileSize,
       canvasSize,
       tilesets: tilesets.map(t => ({ name: t.name, id: t.id })),
-      layers: [grid]
+      layers: [grid],
+      background: backgroundImage ? { opacity: backgroundOpacity } : null
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -104,7 +124,7 @@ export function useTileEditor() {
     a.href = url
     a.download = 'tilemap.json'
     a.click()
-  }, [grid, tileSize, canvasSize, tilesets])
+  }, [grid, tileSize, canvasSize, tilesets, backgroundImage, backgroundOpacity])
 
   const exportPng = useCallback(async () => {
     const canvas = document.createElement('canvas')
@@ -113,7 +133,17 @@ export function useTileEditor() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Preload images
+    // Draw background if exists
+    if (backgroundImage) {
+      const bgImg = new Image()
+      bgImg.src = backgroundImage
+      await new Promise(resolve => { bgImg.onload = resolve })
+      ctx.globalAlpha = backgroundOpacity
+      ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height)
+      ctx.globalAlpha = 1.0
+    }
+
+    // Preload tileset images
     const images: Record<string, HTMLImageElement> = {}
     for (const ts of tilesets) {
       const img = new Image()
@@ -122,7 +152,7 @@ export function useTileEditor() {
       images[ts.id] = img
     }
 
-    // Draw
+    // Draw tiles
     grid.forEach((row, y) => {
       row.forEach((cell, x) => {
         if (cell) {
@@ -143,7 +173,7 @@ export function useTileEditor() {
     a.href = dataUrl
     a.download = 'tilemap.png'
     a.click()
-  }, [grid, canvasSize, tileSize, tilesets])
+  }, [grid, canvasSize, tileSize, tilesets, backgroundImage, backgroundOpacity])
 
   return {
     tilesets,
@@ -162,6 +192,11 @@ export function useTileEditor() {
     setActiveTool,
     clearCanvas,
     exportJson,
-    exportPng
+    exportPng,
+    backgroundImage,
+    setBackgroundImage: handleSetBackgroundImage,
+    removeBackgroundImage,
+    backgroundOpacity,
+    setBackgroundOpacity
   }
 }
