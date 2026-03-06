@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect } from 'react'
-import { GridCell, Tileset, TilePosition } from '@/hooks/use-tile-editor'
+import { GridCell, Tileset, TileSelection } from '@/hooks/use-tile-editor'
 import { cn } from '@/lib/utils'
 
 interface TileCanvasProps {
@@ -11,7 +11,7 @@ interface TileCanvasProps {
   tileSize: { width: number; height: number }
   onPaint: (x: number, y: number) => void
   activeTool: 'paint' | 'eraser'
-  selectedTile: TilePosition | null
+  selection: TileSelection | null
   backgroundImage?: string | null
   backgroundOpacity?: number
 }
@@ -23,14 +23,16 @@ export function TileCanvas({
   tileSize, 
   onPaint, 
   activeTool, 
-  selectedTile,
+  selection,
   backgroundImage,
   backgroundOpacity = 0.5
 }: TileCanvasProps) {
   const [isMouseDown, setIsMouseDown] = useState(false)
+  const [hoverPos, setHoverPos] = useState<{ x: number, y: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const handleMouseMove = (x: number, y: number) => {
+    setHoverPos({ x, y })
     if (isMouseDown) {
       onPaint(x, y)
     }
@@ -56,6 +58,7 @@ export function TileCanvas({
           width: canvasSize.width * tileSize.width,
           height: canvasSize.height * tileSize.height,
         }}
+        onMouseLeave={() => setHoverPos(null)}
       >
         {/* Background Image Layer */}
         {backgroundImage && (
@@ -103,6 +106,37 @@ export function TileCanvas({
             })
           )}
         </div>
+
+        {/* Preview Ghost Layer */}
+        {hoverPos && selection && activeTool === 'paint' && (
+          <div className="absolute inset-0 pointer-events-none opacity-50">
+             {Array.from({ length: selection.h }).map((_, i) => (
+                Array.from({ length: selection.w }).map((_, j) => {
+                  const x = hoverPos.x + j
+                  const y = hoverPos.y + i
+                  if (x >= canvasSize.width || y >= canvasSize.height) return null
+                  const ts = tilesets.find(t => t.id === selection.tilesetId)
+                  if (!ts) return null
+                  return (
+                    <div
+                      key={`preview-${i}-${j}`}
+                      className="absolute"
+                      style={{
+                        left: x * tileSize.width,
+                        top: y * tileSize.height,
+                        width: tileSize.width,
+                        height: tileSize.height,
+                        backgroundImage: `url(${ts.url})`,
+                        backgroundPosition: `-${(selection.tx + j) * tileSize.width}px -${(selection.ty + i) * tileSize.height}px`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: `${ts.width}px ${ts.height}px`
+                      }}
+                    />
+                  )
+                })
+             ))}
+          </div>
+        )}
 
         {/* Interaction Layer */}
         <div 

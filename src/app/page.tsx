@@ -20,7 +20,8 @@ import {
   Trash2,
   Maximize,
   Image as LucideImage,
-  X
+  X,
+  Square
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -30,7 +31,9 @@ export default function TileForge() {
     addTileset,
     selectedTilesetId,
     setSelectedTilesetId,
-    selectedTile,
+    selection,
+    selectionMode,
+    setSelectionMode,
     selectTile,
     tileSize,
     setTileSize,
@@ -97,6 +100,38 @@ export default function TileForge() {
                 <Eraser size={16} /> Eraser
               </Button>
             </div>
+          </section>
+
+          <Separator />
+
+          {/* Selection Mode Toggle */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-xs uppercase text-muted-foreground font-semibold">Selection Mode</Label>
+              <div className="flex bg-secondary/50 p-1 rounded-md">
+                <Button 
+                  variant={selectionMode === 'single' ? 'secondary' : 'ghost'} 
+                  size="sm" 
+                  className="h-7 px-2 text-[10px]"
+                  onClick={() => setSelectionMode('single')}
+                >
+                  Single
+                </Button>
+                <Button 
+                  variant={selectionMode === 'multi' ? 'secondary' : 'ghost'} 
+                  size="sm" 
+                  className="h-7 px-2 text-[10px]"
+                  onClick={() => setSelectionMode('multi')}
+                >
+                  Block
+                </Button>
+              </div>
+            </div>
+            {selection && (
+              <p className="text-[10px] text-muted-foreground">
+                Current: {selection.w}x{selection.h} block
+              </p>
+            )}
           </section>
 
           <Separator />
@@ -189,8 +224,9 @@ export default function TileForge() {
                     <TilesetViewer 
                       tileset={currentTileset}
                       tileSize={tileSize}
-                      selectedTile={selectedTile}
-                      onSelectTile={(tx, ty) => selectTile(currentTileset.id, tx, ty)}
+                      selection={selection}
+                      selectionMode={selectionMode}
+                      onSelectTile={(tx, ty, w, h) => selectTile(currentTileset.id, tx, ty, w, h)}
                     />
                   </div>
                 )}
@@ -280,7 +316,7 @@ export default function TileForge() {
           tileSize={tileSize}
           onPaint={paintTile}
           activeTool={activeTool}
-          selectedTile={selectedTile}
+          selection={selection}
           backgroundImage={backgroundImage}
           backgroundOpacity={backgroundOpacity}
         />

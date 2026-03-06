@@ -16,14 +16,24 @@ export type TilePosition = {
   tilesetId: string
 }
 
+export type TileSelection = {
+  tx: number
+  ty: number
+  w: number
+  h: number
+  tilesetId: string
+}
+
 export type GridCell = TilePosition | null
 
 export type Tool = 'paint' | 'eraser'
+export type SelectionMode = 'single' | 'multi'
 
 export function useTileEditor() {
   const [tilesets, setTilesets] = useState<Tileset[]>([])
   const [selectedTilesetId, setSelectedTilesetId] = useState<string | null>(null)
-  const [selectedTile, setSelectedTile] = useState<TilePosition | null>(null)
+  const [selection, setSelection] = useState<TileSelection | null>(null)
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('single')
   
   const [tileSize, setTileSize] = useState({ width: 32, height: 32 })
   const [canvasSize, setCanvasSize] = useState({ width: 20, height: 15 })
@@ -82,8 +92,8 @@ export function useTileEditor() {
     setBackgroundImage(null)
   }, [backgroundImage])
 
-  const selectTile = useCallback((tilesetId: string, tx: number, ty: number) => {
-    setSelectedTile({ tilesetId, tx, ty })
+  const selectTile = useCallback((tilesetId: string, tx: number, ty: number, w: number = 1, h: number = 1) => {
+    setSelection({ tilesetId, tx, ty, w, h })
     setActiveTool('paint')
   }, [])
 
@@ -91,19 +101,37 @@ export function useTileEditor() {
     if (activeTool === 'eraser') {
       setGrid(prev => {
         const next = [...prev]
-        next[y] = [...next[y]]
-        next[y][x] = null
+        if (next[y]) {
+          next[y] = [...next[y]]
+          next[y][x] = null
+        }
         return next
       })
-    } else if (selectedTile) {
+    } else if (selection) {
       setGrid(prev => {
         const next = [...prev]
-        next[y] = [...next[y]]
-        next[y][x] = selectedTile
+        // Iterate through the selection width and height to stamp the block
+        for (let i = 0; i < selection.h; i++) {
+          const targetY = y + i
+          if (targetY >= canvasSize.height) continue
+          
+          next[targetY] = [...(next[targetY] || [])]
+          
+          for (let j = 0; j < selection.w; j++) {
+            const targetX = x + j
+            if (targetX >= canvasSize.width) continue
+            
+            next[targetY][targetX] = {
+              tilesetId: selection.tilesetId,
+              tx: selection.tx + j,
+              ty: selection.ty + i
+            }
+          }
+        }
         return next
       })
     }
-  }, [selectedTile, activeTool])
+  }, [selection, activeTool, canvasSize.width, canvasSize.height])
 
   const clearCanvas = useCallback(() => {
     setGrid(Array(canvasSize.height).fill(null).map(() => Array(canvasSize.width).fill(null)))
@@ -180,7 +208,9 @@ export function useTileEditor() {
     addTileset,
     selectedTilesetId,
     setSelectedTilesetId,
-    selectedTile,
+    selection,
+    selectionMode,
+    setSelectionMode,
     selectTile,
     tileSize,
     setTileSize,
