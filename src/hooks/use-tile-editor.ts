@@ -46,19 +46,15 @@ export function useTileEditor() {
   const [canvasSize, setCanvasSize] = useState({ width: 20, height: 15 })
   const [zoom, setZoom] = useState(1)
   
-  // Multi-layer state
   const [layers, setLayers] = useState<Layer[]>([
     { id: 'layer-1', name: 'Layer 1', visible: true, data: [] }
   ])
   const [activeLayerId, setActiveLayerId] = useState<string>('layer-1')
-
   const [activeTool, setActiveTool] = useState<Tool>('paint')
 
-  // Background Image State
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5)
 
-  // Sync layer data with canvas size
   useEffect(() => {
     setLayers(prev => {
       return prev.map(layer => {
@@ -193,22 +189,108 @@ export function useTileEditor() {
     })))
   }, [canvasSize])
 
-  const exportJson = useCallback(() => {
+  const toBase64 = async (url: string): Promise<string> => {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  }
+
+  const exportProject = useCallback(async () => {
+    const tilesetsWithData = await Promise.all(
+      tilesets.map(async (ts) => ({
+        ...ts,
+        base64: await toBase64(ts.url)
+      }))
+    )
+
+    let bgBase64 = null
+    if (backgroundImage) {
+      bgBase64 = await toBase64(backgroundImage)
+    }
+
     const data = {
-      name: "TileForge Project",
+      version: "1.0",
       tileSize,
       canvasSize,
-      tilesets: tilesets.map(t => ({ name: t.name, id: t.id })),
-      layers: layers.map(l => ({ name: l.name, data: l.data })),
-      background: backgroundImage ? { opacity: backgroundOpacity } : null
+      tilesets: tilesetsWithData,
+      layers: layers.map(l => ({ 
+        id: l.id, 
+        name: l.name, 
+        visible: l.visible, 
+        data: l.data 
+      })),
+      background: bgBase64 ? { 
+        data: bgBase64, 
+        opacity: backgroundOpacity 
+      } : null
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'tilemap.json'
+    a.download = 'project.forge'
     a.click()
+    URL.revokeObjectURL(url)
   }, [layers, tileSize, canvasSize, tilesets, backgroundImage, backgroundOpacity])
+
+  const importProject = useCallback((file: File) => {
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const content = e.target?.result as string
+      try {
+        const project = JSON.parse(content)
+        
+        // Restore canvas settings
+        setTileSize(project.tileSize)
+        setCanvasSize(project.canvasSize)
+        
+        // Restore tilesets (Convert Base64 back to Blob URLs)
+        const newTilesets: Tileset[] = await Promise.all(
+          project.tilesets.map(async (ts: any) => {
+            const res = await fetch(ts.base64)
+            const blob = await res.blob()
+            return {
+              id: ts.id,
+              name: ts.name,
+              url: URL.createObjectURL(blob),
+              width: ts.width,
+              height: ts.height
+            }
+          })
+        )
+        setTilesets(newTilesets)
+        if (newTilesets.length > 0) {
+          setSelectedTilesetId(newTilesets[0].id)
+        }
+
+        // Restore background
+        if (project.background) {
+          const res = await fetch(project.background.data)
+          const blob = await res.blob()
+          setBackgroundImage(URL.createObjectURL(blob))
+          setBackgroundOpacity(project.background.opacity)
+        } else {
+          setBackgroundImage(null)
+        }
+
+        // Restore layers
+        setLayers(project.layers)
+        if (project.layers.length > 0) {
+          setActiveLayerId(project.layers[0].id)
+        }
+
+      } catch (err) {
+        console.error("Failed to import project:", err)
+      }
+    }
+    reader.readAsText(file)
+  }, [])
 
   const exportPng = useCallback(async () => {
     const canvas = document.createElement('canvas')
@@ -217,7 +299,6 @@ export function useTileEditor() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Draw background if exists
     if (backgroundImage) {
       const bgImg = new Image()
       bgImg.src = backgroundImage
@@ -227,7 +308,6 @@ export function useTileEditor() {
       ctx.globalAlpha = 1.0
     }
 
-    // Preload tileset images
     const images: Record<string, HTMLImageElement> = {}
     for (const ts of tilesets) {
       const img = new Image()
@@ -236,7 +316,6 @@ export function useTileEditor() {
       images[ts.id] = img
     }
 
-    // Draw tiles (reverse order because layers[0] is top)
     [...layers].reverse().forEach(layer => {
       if (!layer.visible) return
       layer.data.forEach((row, y) => {
@@ -288,7 +367,8 @@ export function useTileEditor() {
     activeTool,
     setActiveTool,
     clearCanvas,
-    exportJson,
+    exportProject,
+    importProject,
     exportPng,
     backgroundImage,
     setBackgroundImage: handleSetBackgroundImage,

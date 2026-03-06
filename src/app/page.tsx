@@ -29,7 +29,8 @@ import {
   ChevronDown,
   ZoomIn,
   ZoomOut,
-  Search
+  Search,
+  FolderOpen
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
@@ -61,7 +62,8 @@ export default function TileForge() {
     activeTool,
     setActiveTool,
     clearCanvas,
-    exportJson,
+    exportProject,
+    importProject,
     exportPng,
     backgroundImage,
     setBackgroundImage,
@@ -83,6 +85,13 @@ export default function TileForge() {
     const file = e.target.files?.[0]
     if (file) {
       setBackgroundImage(file)
+    }
+  }
+
+  const handleProjectImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      importProject(file)
     }
   }
 
@@ -426,8 +435,14 @@ export default function TileForge() {
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={exportJson}>
-              <Download size={16} className="mr-2" /> Export JSON
+            <Button variant="outline" size="sm" asChild>
+              <label className="cursor-pointer">
+                <FolderOpen size={16} className="mr-2" /> Import
+                <input type="file" className="hidden" accept=".forge" onChange={handleProjectImport} />
+              </label>
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportProject}>
+              <Download size={16} className="mr-2" /> Save Project
             </Button>
             <Button size="sm" onClick={exportPng}>
               <Save size={16} className="mr-2" /> Export PNG
