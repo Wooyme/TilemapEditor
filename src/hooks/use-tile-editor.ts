@@ -50,12 +50,23 @@ export type Layer = {
 
 export type Tool = 'paint' | 'eraser' | 'select'
 
+export type SelectionMode = 'single' | 'block'
+
+export type TileSelection = { 
+  tx: number
+  ty: number
+  w: number
+  h: number
+  tilesetId: string 
+}
+
 export function useTileEditor() {
   const [tilesets, setTilesets] = useState<Tileset[]>([])
   const [components, setComponents] = useState<ComponentAsset[]>([])
   const [selectedTilesetId, setSelectedTilesetId] = useState<string | null>(null)
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
-  const [selection, setSelection] = useState<{ tx: number, ty: number, w: number, h: number, tilesetId: string } | null>(null)
+  const [selection, setSelection] = useState<TileSelection | null>(null)
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('single')
   
   const [tileSize, setTileSize] = useState({ width: 32, height: 32 })
   const [canvasSize, setCanvasSize] = useState({ width: 20, height: 15 })
@@ -98,7 +109,6 @@ export function useTileEditor() {
     img.src = url
   }, [selectedTilesetId])
 
-  // Split image by transparency
   const addComponentSource = useCallback(async (file: File) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
@@ -121,7 +131,6 @@ export function useTileEditor() {
     const newComponents: ComponentAsset[] = []
     const sourceId = crypto.randomUUID()
 
-    // Simple BFS to find connected opaque pixels
     for (let y = 0; y < img.height; y++) {
       for (let x = 0; x < img.width; x++) {
         const idx = (y * img.width + x)
@@ -149,7 +158,6 @@ export function useTileEditor() {
             }
           }
 
-          // Create crop
           const w = maxX - minX + 1
           const h = maxY - minY + 1
           const cropCanvas = document.createElement('canvas')
@@ -186,11 +194,20 @@ export function useTileEditor() {
             nextData[y][x] = null
           }
         } else if (selection) {
-          nextData[y] = [...(nextData[y] || [])]
-          nextData[y][x] = {
-            tilesetId: selection.tilesetId,
-            tx: selection.tx,
-            ty: selection.ty
+          // Multi-tile stamp
+          for (let sy = 0; sy < selection.h; sy++) {
+            for (let sx = 0; sx < selection.w; sx++) {
+              const targetY = y + sy
+              const targetX = x + sx
+              if (nextData[targetY] && targetX < canvasSize.width) {
+                nextData[targetY] = [...nextData[targetY]]
+                nextData[targetY][targetX] = {
+                  tilesetId: selection.tilesetId,
+                  tx: selection.tx + sx,
+                  ty: selection.ty + sy
+                }
+              }
+            }
           }
         }
         return { ...layer, tileData: nextData }
@@ -209,7 +226,6 @@ export function useTileEditor() {
           }
           return { ...layer, objects: [...layer.objects, newObj] }
         } else if (activeTool === 'eraser') {
-          // Erase object at grid position
           const pxX = x * tileSize.width
           const pxY = y * tileSize.height
           return {
@@ -222,7 +238,7 @@ export function useTileEditor() {
       }
       return layer
     }))
-  }, [selection, activeTool, activeLayerId, selectedComponentId, components, tileSize])
+  }, [selection, activeTool, activeLayerId, selectedComponentId, components, tileSize, canvasSize])
 
   const addLayer = useCallback(() => {
     const newLayer: Layer = {
@@ -247,6 +263,7 @@ export function useTileEditor() {
     selectedTilesetId, setSelectedTilesetId,
     selectedComponentId, setSelectedComponentId,
     selection, setSelection,
+    selectionMode, setSelectionMode,
     tileSize, setTileSize,
     canvasSize, setCanvasSize,
     zoom, setZoom,

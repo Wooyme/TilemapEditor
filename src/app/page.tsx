@@ -1,4 +1,3 @@
-
 "use client"
 
 import React from 'react'
@@ -11,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { 
   Upload, 
   Paintbrush, 
@@ -25,7 +25,8 @@ import {
   Box,
   Image as LucideImage,
   Sparkles,
-  Settings2
+  Settings2,
+  MousePointer2
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
@@ -37,6 +38,7 @@ export default function TileForge() {
     selectedTilesetId, setSelectedTilesetId,
     selectedComponentId, setSelectedComponentId,
     selection, setSelection,
+    selectionMode, setSelectionMode,
     tileSize, setTileSize,
     canvasSize, setCanvasSize,
     zoom, setZoom,
@@ -133,7 +135,25 @@ export default function TileForge() {
               <TabsTrigger value="components" className="text-xs">Objects</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="tilesets" className="space-y-3 pt-4">
+            <TabsContent value="tilesets" className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] uppercase text-muted-foreground font-semibold">Selection Mode</Label>
+                <RadioGroup 
+                  defaultValue={selectionMode} 
+                  onValueChange={(v) => setSelectionMode(v as any)}
+                  className="flex items-center gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="single" id="mode-single" />
+                    <Label htmlFor="mode-single" className="text-[10px]">Single</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="block" id="mode-block" />
+                    <Label htmlFor="mode-block" className="text-[10px]">Block</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
               <div className="flex items-center justify-between">
                 <Label className="text-[10px] uppercase text-muted-foreground font-semibold">Loaded Tilesets</Label>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
@@ -155,7 +175,8 @@ export default function TileForge() {
                   tileset={currentTileset}
                   tileSize={tileSize}
                   selection={selection}
-                  onSelectTile={(tx, ty) => setSelection({ tx, ty, w: 1, h: 1, tilesetId: currentTileset.id })}
+                  selectionMode={selectionMode}
+                  onSelectTile={(tx, ty, w = 1, h = 1) => setSelection({ tx, ty, w, h, tilesetId: currentTileset.id })}
                 />
               )}
             </TabsContent>

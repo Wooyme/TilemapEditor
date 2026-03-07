@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Layer, Tileset, ComponentAsset } from '@/hooks/use-tile-editor'
+import { Layer, Tileset, ComponentAsset, TileSelection } from '@/hooks/use-tile-editor'
 import { cn } from '@/lib/utils'
 
 interface TileCanvasProps {
@@ -14,7 +14,7 @@ interface TileCanvasProps {
   zoom: number
   onPaint: (x: number, y: number) => void
   activeTool: 'paint' | 'eraser' | 'select'
-  selection: { tx: number, ty: number, w: number, h: number, tilesetId: string } | null
+  selection: TileSelection | null
   selectedComponentId: string | null
 }
 
@@ -142,9 +142,9 @@ export function TileCanvas({
               const x = i % canvasSize.width
               const y = Math.floor(i / canvasSize.width)
               
-              // Ghost Previews
-              const showTileGhost = hoverPos?.x === x && hoverPos?.y === y && activeTool === 'paint' && activeLayer?.mode === 'tilemap' && selection
-              const showObjGhost = hoverPos?.x === x && hoverPos?.y === y && activeTool === 'paint' && activeLayer?.mode === 'object' && selectedComponentId
+              const isHovered = hoverPos?.x === x && hoverPos?.y === y
+              const showTileGhost = isHovered && activeTool === 'paint' && activeLayer?.mode === 'tilemap' && selection
+              const showObjGhost = isHovered && activeTool === 'paint' && activeLayer?.mode === 'object' && selectedComponentId
 
               return (
                 <div
@@ -155,8 +155,12 @@ export function TileCanvas({
                 >
                   {showTileGhost && selection && (
                     <div 
-                      className="absolute inset-0 opacity-50"
+                      className="absolute pointer-events-none opacity-50 z-[70]"
                       style={{
+                        left: 0,
+                        top: 0,
+                        width: selection.w * tileSize.width,
+                        height: selection.h * tileSize.height,
                         backgroundImage: `url(${tilesets.find(t => t.id === selection.tilesetId)?.url})`,
                         backgroundPosition: `-${selection.tx * tileSize.width}px -${selection.ty * tileSize.height}px`,
                         backgroundSize: `${tilesets.find(t => t.id === selection.tilesetId)?.width}px ${tilesets.find(t => t.id === selection.tilesetId)?.height}px`,
