@@ -12,6 +12,13 @@ import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from "@/components/ui/dialog"
+import { 
   Upload, 
   Paintbrush, 
   Eraser, 
@@ -36,7 +43,8 @@ import {
   MinusCircle,
   FileJson,
   FolderOpen,
-  Rocket
+  Rocket,
+  Eye as ViewIcon
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -64,9 +72,13 @@ export default function TileForge() {
 
   const { toast } = useToast()
   const [isExporting, setIsExporting] = useState(false)
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false)
   const [isProjectLoading, setIsProjectLoading] = useState(false)
   const [isReleasing, setIsReleasing] = useState(false)
   
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
 
@@ -89,64 +101,86 @@ export default function TileForge() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [tilesets.length, components.length, layers])
 
+  const generateCompositedCanvas = async (): Promise<HTMLCanvasElement> => {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvasSize.width * tileSize.width
+    canvas.height = canvasSize.height * tileSize.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error("Could not initialize canvas context")
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    const loadImage = (url: string): Promise<HTMLImageElement> => {
+      return new Promise((resolve, reject) => {
+        const img = new Image()
+        img.crossOrigin = "anonymous"
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = url
+      })
+    }
+
+    const tilesetCache = new Map<string, HTMLImageElement>()
+    for (const ts of tilesets) {
+      tilesetCache.set(ts.id, await loadImage(ts.url))
+    }
+
+    const componentCache = new Map<string, HTMLImageElement>()
+    for (const comp of components) {
+      componentCache.set(comp.id, await loadImage(comp.url))
+    }
+
+    const renderLayers = [...layers].reverse()
+    for (const layer of renderLayers) {
+      if (!layer.visible) continue
+
+      if (layer.mode === 'tilemap') {
+        layer.tileData.forEach((row, y) => {
+          row.forEach((cell, x) => {
+            if (!cell) return
+            const img = tilesetCache.get(cell.tilesetId)
+            if (!img) return
+            
+            ctx.drawImage(
+              img,
+              cell.tx * tileSize.width, cell.ty * tileSize.height, tileSize.width, tileSize.height,
+              x * tileSize.width, y * tileSize.height, tileSize.width, tileSize.height
+            )
+          })
+        })
+      } else {
+        layer.objects.forEach((obj) => {
+          const img = componentCache.get(obj.componentId)
+          if (!img) return
+          ctx.drawImage(img, obj.x, obj.y, obj.width, obj.height)
+        })
+      }
+    }
+    return canvas
+  }
+
+  const handlePreview = async () => {
+    setIsPreviewLoading(true)
+    try {
+      const canvas = await generateCompositedCanvas()
+      setPreviewUrl(canvas.toDataURL('image/png'))
+      setIsPreviewOpen(true)
+    } catch (error) {
+      console.error(error)
+      toast({
+        variant: "destructive",
+        title: "Preview Failed",
+        description: "There was an error generating the preview image.",
+      })
+    } finally {
+      setIsPreviewLoading(false)
+    }
+  }
+
   const handleExportPNG = async () => {
     setIsExporting(true)
     try {
-      const canvas = document.createElement('canvas')
-      canvas.width = canvasSize.width * tileSize.width
-      canvas.height = canvasSize.height * tileSize.height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) throw new Error("Could not initialize canvas context")
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-      const loadImage = (url: string): Promise<HTMLImageElement> => {
-        return new Promise((resolve, reject) => {
-          const img = new Image()
-          img.crossOrigin = "anonymous"
-          img.onload = () => resolve(img)
-          img.onerror = reject
-          img.src = url
-        })
-      }
-
-      const tilesetCache = new Map<string, HTMLImageElement>()
-      for (const ts of tilesets) {
-        tilesetCache.set(ts.id, await loadImage(ts.url))
-      }
-
-      const componentCache = new Map<string, HTMLImageElement>()
-      for (const comp of components) {
-        componentCache.set(comp.id, await loadImage(comp.url))
-      }
-
-      const renderLayers = [...layers].reverse()
-      for (const layer of renderLayers) {
-        if (!layer.visible) continue
-
-        if (layer.mode === 'tilemap') {
-          layer.tileData.forEach((row, y) => {
-            row.forEach((cell, x) => {
-              if (!cell) return
-              const img = tilesetCache.get(cell.tilesetId)
-              if (!img) return
-              
-              ctx.drawImage(
-                img,
-                cell.tx * tileSize.width, cell.ty * tileSize.height, tileSize.width, tileSize.height,
-                x * tileSize.width, y * tileSize.height, tileSize.width, tileSize.height
-              )
-            })
-          })
-        } else {
-          layer.objects.forEach((obj) => {
-            const img = componentCache.get(obj.componentId)
-            if (!img) return
-            ctx.drawImage(img, obj.x, obj.y, obj.width, obj.height)
-          })
-        }
-      }
-
+      const canvas = await generateCompositedCanvas()
       const dataUrl = canvas.toDataURL('image/png')
       const link = document.createElement('a')
       link.download = 'tileforge-map.png'
@@ -710,6 +744,16 @@ export default function TileForge() {
                 variant="outline"
                 size="sm" 
                 className="h-8 shadow-sm" 
+                onClick={handlePreview}
+                disabled={isPreviewLoading}
+               >
+                  {isPreviewLoading ? <Loader2 className="mr-2 animate-spin" /> : <ViewIcon className="mr-2" />}
+                  Preview
+               </Button>
+               <Button 
+                variant="outline"
+                size="sm" 
+                className="h-8 shadow-sm" 
                 onClick={handleExportRelease}
                 disabled={isReleasing}
                >
@@ -743,6 +787,32 @@ export default function TileForge() {
           selectedComponentId={selectedComponentId}
         />
       </main>
+
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Map Preview</DialogTitle>
+            <DialogDescription>
+              This is a composite of all visible layers. What you see is what will be exported.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto bg-secondary/20 p-4 rounded-md flex items-center justify-center">
+            {previewUrl && (
+              <img 
+                src={previewUrl} 
+                alt="Map Preview" 
+                className="max-w-full h-auto shadow-lg border bg-white" 
+                style={{ imageRendering: 'pixelated' }}
+              />
+            )}
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Close</Button>
+            <Button onClick={handleExportPNG}>Download PNG</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Toaster />
     </div>
   )
