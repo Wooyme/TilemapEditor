@@ -28,7 +28,8 @@ import {
   Settings2,
   MousePointer2,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Scaling
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
@@ -83,6 +84,15 @@ export default function TileForge() {
                 onClick={() => setActiveTool('eraser')}
               >
                 <Eraser size={14} className="mr-2" /> Eraser
+              </Button>
+              <Button 
+                variant={activeTool === 'scale' ? 'default' : 'outline'} 
+                size="sm"
+                onClick={() => setActiveTool('scale')}
+                disabled={activeLayer?.mode !== 'object'}
+                title={activeLayer?.mode !== 'object' ? "Scale only available for Object layers" : "Scale Object"}
+              >
+                <Scaling size={14} className="mr-2" /> Scale
               </Button>
             </div>
           </section>

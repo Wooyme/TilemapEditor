@@ -48,7 +48,7 @@ export type Layer = {
   objects: PlacedObject[] // For object mode
 }
 
-export type Tool = 'paint' | 'eraser' | 'select'
+export type Tool = 'paint' | 'eraser' | 'select' | 'scale'
 
 export type SelectionMode = 'single' | 'block'
 
@@ -233,6 +233,23 @@ export function useTileEditor() {
             objects: layer.objects.filter(obj => 
               !(pxX >= obj.x && pxX < obj.x + obj.width && pxY >= obj.y && pxY < obj.y + obj.height)
             )
+          }
+        } else if (activeTool === 'scale') {
+          const pxX = x * tileSize.width
+          const pxY = y * tileSize.height
+          // Scale the first object hit at this position
+          return {
+            ...layer,
+            objects: layer.objects.map(obj => {
+              if (pxX >= obj.x && pxX < obj.x + obj.width && pxY >= obj.y && pxY < obj.y + obj.height) {
+                return { 
+                  ...obj, 
+                  width: Math.round(obj.width * 1.1), 
+                  height: Math.round(obj.height * 1.1) 
+                }
+              }
+              return obj
+            })
           }
         }
       }
