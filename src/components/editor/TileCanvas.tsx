@@ -162,12 +162,12 @@ export function TileCanvas({
                 >
                   {showTileGhost && selection && (
                     <div 
-                      className="absolute pointer-events-none opacity-25 z-[70]"
+                      className="absolute pointer-events-none opacity-10 z-[70] max-w-none max-h-none"
                       style={{
                         left: 0,
                         top: 0,
-                        width: selection.w * tileSize.width,
-                        height: selection.h * tileSize.height,
+                        width: (selection.w * tileSize.width) + 'px',
+                        height: (selection.h * tileSize.height) + 'px',
                         backgroundImage: `url(${tilesets.find(t => t.id === selection.tilesetId)?.url})`,
                         backgroundPosition: `-${selection.tx * tileSize.width}px -${selection.ty * tileSize.height}px`,
                         backgroundSize: `${tilesets.find(t => t.id === selection.tilesetId)?.width}px ${tilesets.find(t => t.id === selection.tilesetId)?.height}px`,
@@ -178,10 +178,10 @@ export function TileCanvas({
                   {showObjGhost && selectedComponentId && (
                     <img 
                       src={components.find(c => c.id === selectedComponentId)?.url}
-                      className="absolute top-0 left-0 opacity-25 pointer-events-none max-none"
+                      className="absolute top-0 left-0 opacity-10 pointer-events-none max-w-none max-h-none"
                       style={{ 
-                        width: components.find(c => c.id === selectedComponentId)?.width,
-                        height: components.find(c => c.id === selectedComponentId)?.height,
+                        width: (components.find(c => c.id === selectedComponentId)?.width || 0) + 'px',
+                        height: (components.find(c => c.id === selectedComponentId)?.height || 0) + 'px',
                         imageRendering: 'pixelated'
                       }}
                     />
