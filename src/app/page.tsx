@@ -31,7 +31,9 @@ import {
   ChevronDown,
   Scaling,
   Download,
-  Loader2
+  Loader2,
+  PlusCircle,
+  MinusCircle
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -51,6 +53,7 @@ export default function TileForge() {
     layers, activeLayerId, setActiveLayerId,
     addLayer, toggleLayerMode, reorderLayer,
     paintTile, activeTool, setActiveTool,
+    scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage,
     backgroundOpacity, setBackgroundOpacity
   } = useTileEditor()
@@ -180,13 +183,38 @@ export default function TileForge() {
               <Button 
                 variant={activeTool === 'scale' ? 'default' : 'outline'} 
                 size="sm"
+                className="col-span-2"
                 onClick={() => setActiveTool('scale')}
                 disabled={activeLayer?.mode !== 'object'}
                 title={activeLayer?.mode !== 'object' ? "Scale only available for Object layers" : "Scale Object"}
               >
-                <Scaling size={14} className="mr-2" /> Scale
+                <Scaling size={14} className="mr-2" /> Scale Tool
               </Button>
             </div>
+            
+            {activeTool === 'scale' && activeLayer?.mode === 'object' && (
+              <div className="mt-3 p-2 bg-secondary/30 rounded-md border border-dashed animate-in fade-in slide-in-from-top-1">
+                <Label className="text-[10px] uppercase text-muted-foreground font-bold mb-2 block">Scale Direction</Label>
+                <div className="flex gap-2">
+                  <Button 
+                    variant={scaleDirection === 'up' ? 'default' : 'outline'} 
+                    size="sm" 
+                    className="flex-1 h-8 text-xs"
+                    onClick={() => setScaleDirection('up')}
+                  >
+                    <PlusCircle size={12} className="mr-1" /> Up
+                  </Button>
+                  <Button 
+                    variant={scaleDirection === 'down' ? 'default' : 'outline'} 
+                    size="sm" 
+                    className="flex-1 h-8 text-xs"
+                    onClick={() => setScaleDirection('down')}
+                  >
+                    <MinusCircle size={12} className="mr-1" /> Down
+                  </Button>
+                </div>
+              </div>
+            )}
           </section>
 
           <Separator />

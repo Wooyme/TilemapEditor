@@ -50,6 +50,8 @@ export type Layer = {
 
 export type Tool = 'paint' | 'eraser' | 'select' | 'scale'
 
+export type ScaleDirection = 'up' | 'down'
+
 export type SelectionMode = 'single' | 'block'
 
 export type TileSelection = { 
@@ -77,6 +79,7 @@ export function useTileEditor() {
   ])
   const [activeLayerId, setActiveLayerId] = useState<string>('layer-1')
   const [activeTool, setActiveTool] = useState<Tool>('paint')
+  const [scaleDirection, setScaleDirection] = useState<ScaleDirection>('up')
 
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5)
@@ -237,6 +240,7 @@ export function useTileEditor() {
         } else if (activeTool === 'scale') {
           const pxX = x * tileSize.width
           const pxY = y * tileSize.height
+          const factor = scaleDirection === 'up' ? 1.1 : 0.9
           // Scale the first object hit at this position
           return {
             ...layer,
@@ -244,8 +248,8 @@ export function useTileEditor() {
               if (pxX >= obj.x && pxX < obj.x + obj.width && pxY >= obj.y && pxY < obj.y + obj.height) {
                 return { 
                   ...obj, 
-                  width: Math.round(obj.width * 1.1), 
-                  height: Math.round(obj.height * 1.1) 
+                  width: Math.max(5, Math.round(obj.width * factor)), 
+                  height: Math.max(5, Math.round(obj.height * factor)) 
                 }
               }
               return obj
@@ -255,7 +259,7 @@ export function useTileEditor() {
       }
       return layer
     }))
-  }, [selection, activeTool, activeLayerId, selectedComponentId, components, tileSize, canvasSize])
+  }, [selection, activeTool, activeLayerId, selectedComponentId, components, tileSize, canvasSize, scaleDirection])
 
   const addLayer = useCallback(() => {
     const newLayer: Layer = {
@@ -301,6 +305,7 @@ export function useTileEditor() {
     layers, activeLayerId, setActiveLayerId,
     addLayer, toggleLayerMode, reorderLayer,
     paintTile, activeTool, setActiveTool,
+    scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity
   }
 }
