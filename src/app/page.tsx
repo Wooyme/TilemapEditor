@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useTileEditor, Layer } from '@/hooks/use-tile-editor'
 import { TilesetViewer } from '@/components/editor/TilesetViewer'
 import { TileCanvas } from '@/components/editor/TileCanvas'
@@ -70,6 +70,24 @@ export default function TileForge() {
 
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
   const activeLayer = layers.find(l => l.id === activeLayerId)
+
+  // Prompt user before leaving if there is data in the workspace
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const hasTiles = layers.some(l => l.tileData?.some(row => row.some(cell => cell !== null)))
+      const hasObjects = layers.some(l => l.objects?.length > 0)
+      const hasAssets = tilesets.length > 0 || components.length > 0
+      
+      if (hasTiles || hasObjects || hasAssets) {
+        e.preventDefault()
+        // Standard procedure for modern browsers to show the confirmation dialog
+        e.returnValue = '' 
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [tilesets.length, components.length, layers])
 
   const handleExportPNG = async () => {
     setIsExporting(true)
