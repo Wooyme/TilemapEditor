@@ -95,13 +95,14 @@ export function useTileEditor() {
     }))
   }, [canvasSize.width, canvasSize.height])
 
-  const addTileset = useCallback((file: File) => {
-    const url = URL.createObjectURL(file)
+  const addTileset = useCallback((file: File | string, name?: string) => {
+    const url = typeof file === 'string' ? file : URL.createObjectURL(file)
+    const fileName = typeof file === 'string' ? (name || 'Imported Tileset') : file.name
     const img = new Image()
     img.onload = () => {
       const newTileset: Tileset = {
         id: crypto.randomUUID(),
-        name: file.name,
+        name: fileName,
         url,
         width: img.width,
         height: img.height,
@@ -292,9 +293,20 @@ export function useTileEditor() {
     })
   }, [])
 
+  const importProject = useCallback((project: any) => {
+    if (project.tilesets) setTilesets(project.tilesets)
+    if (project.components) setComponents(project.components)
+    if (project.layers) setLayers(project.layers)
+    if (project.tileSize) setTileSize(project.tileSize)
+    if (project.canvasSize) setCanvasSize(project.canvasSize)
+    if (project.activeLayerId) setActiveLayerId(project.activeLayerId)
+    if (project.backgroundImage) setBackgroundImage(project.backgroundImage)
+    if (project.backgroundOpacity) setBackgroundOpacity(project.backgroundOpacity)
+  }, [])
+
   return {
-    tilesets, addTileset,
-    components, addComponentSource,
+    tilesets, setTilesets, addTileset,
+    components, setComponents, addComponentSource,
     selectedTilesetId, setSelectedTilesetId,
     selectedComponentId, setSelectedComponentId,
     selection, setSelection,
@@ -302,10 +314,11 @@ export function useTileEditor() {
     tileSize, setTileSize,
     canvasSize, setCanvasSize,
     zoom, setZoom,
-    layers, activeLayerId, setActiveLayerId,
+    layers, setLayers, activeLayerId, setActiveLayerId,
     addLayer, toggleLayerMode, reorderLayer,
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
-    backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity
+    backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
+    importProject
   }
 }

@@ -33,7 +33,9 @@ import {
   Download,
   Loader2,
   PlusCircle,
-  MinusCircle
+  MinusCircle,
+  FileJson,
+  FolderOpen
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -55,16 +57,18 @@ export default function TileForge() {
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage,
-    backgroundOpacity, setBackgroundOpacity
+    backgroundOpacity, setBackgroundOpacity,
+    importProject
   } = useTileEditor()
 
   const { toast } = useToast()
   const [isExporting, setIsExporting] = useState(false)
+  const [isProjectLoading, setIsProjectLoading] = useState(false)
 
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
   const activeLayer = layers.find(l => l.id === activeLayerId)
 
-  const handleExport = async () => {
+  const handleExportPNG = async () => {
     setIsExporting(true)
     try {
       const canvas = document.createElement('canvas')
@@ -73,21 +77,18 @@ export default function TileForge() {
       const ctx = canvas.getContext('2d')
       if (!ctx) throw new Error("Could not initialize canvas context")
 
-      // Clear with transparency or white? Let's go with transparency but optional white background
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-      // Helper to load images
       const loadImage = (url: string): Promise<HTMLImageElement> => {
         return new Promise((resolve, reject) => {
           const img = new Image()
-          img.crossOrigin = "anonymous" // For potential remote tilesets
+          img.crossOrigin = "anonymous"
           img.onload = () => resolve(img)
           img.onerror = reject
           img.src = url
         })
       }
 
-      // Pre-cache all needed images
       const tilesetCache = new Map<string, HTMLImageElement>()
       for (const ts of tilesets) {
         tilesetCache.set(ts.id, await loadImage(ts.url))
@@ -98,7 +99,6 @@ export default function TileForge() {
         componentCache.set(comp.id, await loadImage(comp.url))
       }
 
-      // Draw layers from bottom to top
       const renderLayers = [...layers].reverse()
       for (const layer of renderLayers) {
         if (!layer.visible) continue
@@ -118,7 +118,6 @@ export default function TileForge() {
             })
           })
         } else {
-          // Object mode
           layer.objects.forEach((obj) => {
             const img = componentCache.get(obj.componentId)
             if (!img) return
@@ -127,7 +126,6 @@ export default function TileForge() {
         }
       }
 
-      // Trigger download
       const dataUrl = canvas.toDataURL('image/png')
       const link = document.createElement('a')
       link.download = 'tileforge-map.png'
@@ -150,6 +148,90 @@ export default function TileForge() {
     }
   }
 
+  const handleExportProject = async () => {
+    setIsProjectLoading(true)
+    try {
+      const urlToBase64 = async (url: string): Promise<string> => {
+        if (url.startsWith('data:')) return url
+        try {
+          const response = await fetch(url)
+          const blob = await response.blob()
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+        } catch (e) {
+          return url
+        }
+      }
+
+      const serializedTilesets = await Promise.all(tilesets.map(async (ts) => ({
+        ...ts,
+        url: await urlToBase64(ts.url)
+      })))
+
+      const projectData = {
+        version: "1.0",
+        tilesets: serializedTilesets,
+        components,
+        layers,
+        tileSize,
+        canvasSize,
+        activeLayerId,
+        backgroundImage: backgroundImage ? await urlToBase64(backgroundImage) : null,
+        backgroundOpacity
+      }
+
+      const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `project-${new Date().toISOString().slice(0,10)}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      toast({
+        title: "Project Exported",
+        description: "Workspace configuration has been saved.",
+      })
+    } catch (error) {
+      console.error(error)
+      toast({
+        variant: "destructive",
+        title: "Project Export Failed",
+        description: "Could not serialize workspace data.",
+      })
+    } finally {
+      setIsProjectLoading(false)
+    }
+  }
+
+  const handleImportProject = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string)
+        importProject(data)
+        toast({
+          title: "Project Imported",
+          description: "Workspace has been restored.",
+        })
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Import Failed",
+          description: "Invalid project file format.",
+        })
+      }
+    }
+    reader.readAsText(file)
+  }
+
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-body text-foreground">
       {/* Left Sidebar */}
@@ -162,6 +244,24 @@ export default function TileForge() {
         </header>
 
         <div className="p-4 space-y-6">
+          {/* Project Management */}
+          <section>
+            <Label className="text-xs uppercase text-muted-foreground font-semibold mb-2 block">Project</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" size="sm" onClick={handleExportProject} disabled={isProjectLoading}>
+                {isProjectLoading ? <Loader2 size={14} className="mr-2 animate-spin" /> : <FileJson size={14} className="mr-2" />} Export
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <label className="cursor-pointer">
+                  <FolderOpen size={14} className="mr-2" /> Import
+                  <input type="file" className="hidden" accept=".json" onChange={handleImportProject} />
+                </label>
+              </Button>
+            </div>
+          </section>
+
+          <Separator />
+
           {/* Tools */}
           <section>
             <Label className="text-xs uppercase text-muted-foreground font-semibold mb-2 block">Toolbar</Label>
@@ -437,7 +537,7 @@ export default function TileForge() {
              <Button 
               size="sm" 
               className="h-8 shadow-sm" 
-              onClick={handleExport}
+              onClick={handleExportPNG}
               disabled={isExporting}
              >
                 {isExporting ? <Loader2 className="mr-2 animate-spin" /> : <Download className="mr-2" />}
