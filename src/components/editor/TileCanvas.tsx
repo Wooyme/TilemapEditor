@@ -162,7 +162,7 @@ export function TileCanvas({
                 >
                   {showTileGhost && selection && (
                     <div 
-                      className="absolute pointer-events-none opacity-10 z-[70] max-w-none max-h-none"
+                      className="absolute pointer-events-none z-[70] max-w-none max-h-none"
                       style={{
                         left: 0,
                         top: 0,
@@ -178,7 +178,7 @@ export function TileCanvas({
                   {showObjGhost && selectedComponentId && (
                     <img 
                       src={components.find(c => c.id === selectedComponentId)?.url}
-                      className="absolute top-0 left-0 opacity-10 pointer-events-none max-w-none max-h-none"
+                      className="absolute top-0 left-0 pointer-events-none max-w-none max-h-none"
                       style={{ 
                         width: (components.find(c => c.id === selectedComponentId)?.width || 0) + 'px',
                         height: (components.find(c => c.id === selectedComponentId)?.height || 0) + 'px',
