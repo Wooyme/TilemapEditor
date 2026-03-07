@@ -35,7 +35,8 @@ import {
   PlusCircle,
   MinusCircle,
   FileJson,
-  FolderOpen
+  FolderOpen,
+  Rocket
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -64,6 +65,7 @@ export default function TileForge() {
   const { toast } = useToast()
   const [isExporting, setIsExporting] = useState(false)
   const [isProjectLoading, setIsProjectLoading] = useState(false)
+  const [isReleasing, setIsReleasing] = useState(false)
   
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
@@ -71,7 +73,6 @@ export default function TileForge() {
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
   const activeLayer = layers.find(l => l.id === activeLayerId)
 
-  // Prompt user before leaving if there is data in the workspace
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const hasTiles = layers.some(l => l.tileData?.some(row => row.some(cell => cell !== null)))
@@ -80,7 +81,6 @@ export default function TileForge() {
       
       if (hasTiles || hasObjects || hasAssets) {
         e.preventDefault()
-        // Standard procedure for modern browsers to show the confirmation dialog
         e.returnValue = '' 
       }
     }
@@ -166,6 +166,93 @@ export default function TileForge() {
       })
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  const handleExportRelease = async () => {
+    setIsReleasing(true)
+    try {
+      const mapWidth = canvasSize.width * tileSize.width
+      const mapHeight = canvasSize.height * tileSize.height
+
+      const loadImage = (url: string): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image()
+          img.crossOrigin = "anonymous"
+          img.onload = () => resolve(img)
+          img.onerror = reject
+          img.src = url
+        })
+      }
+
+      const componentCache = new Map<string, HTMLImageElement>()
+      for (const comp of components) {
+        componentCache.set(comp.id, await loadImage(comp.url))
+      }
+
+      const releaseLayers = await Promise.all(layers.map(async (layer) => {
+        if (layer.mode === 'tilemap') {
+          return {
+            id: layer.id,
+            name: layer.name,
+            type: 'tilemap',
+            visible: layer.visible,
+            data: layer.tileData
+          }
+        } else {
+          // Bake object layer to a single picture cropped to canvas size
+          const canvas = document.createElement('canvas')
+          canvas.width = mapWidth
+          canvas.height = mapHeight
+          const ctx = canvas.getContext('2d')
+          if (!ctx) throw new Error("Canvas context failed")
+
+          layer.objects.forEach(obj => {
+            const img = componentCache.get(obj.componentId)
+            if (!img) return
+            // Draw only if it fits/overlaps the canvas bounds
+            ctx.drawImage(img, obj.x, obj.y, obj.width, obj.height)
+          })
+
+          return {
+            id: layer.id,
+            name: layer.name,
+            type: 'baked_objects',
+            visible: layer.visible,
+            image: canvas.toDataURL('image/png')
+          }
+        }
+      }))
+
+      const releasePackage = {
+        version: "1.0-release",
+        name: "TileForge Project Release",
+        canvasSize,
+        tileSize,
+        layers: releaseLayers
+      }
+
+      const blob = new Blob([JSON.stringify(releasePackage, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `release-${new Date().toISOString().slice(0,10)}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      toast({
+        title: "Release Exported",
+        description: "Baked object layers and tilemap data are ready.",
+      })
+    } catch (error) {
+      console.error(error)
+      toast({
+        variant: "destructive",
+        title: "Release Failed",
+        description: "Could not bake object layers.",
+      })
+    } finally {
+      setIsReleasing(false)
     }
   }
 
@@ -576,23 +663,36 @@ export default function TileForge() {
              </div>
           </div>
 
-          <div className="flex items-center gap-4 shrink-0 ml-4">
-             <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 shrink-0 ml-4">
+             <div className="flex items-center gap-2 border-r pr-3">
                 <Label className="text-[10px] font-semibold text-muted-foreground uppercase">Zoom</Label>
                 <div className="flex items-center gap-2 bg-secondary/20 p-1 px-2 rounded-md border">
                   <Slider className="w-20" value={[zoom]} min={0.25} max={4} step={0.1} onValueChange={([v]) => setZoom(v)} />
                   <span className="text-[10px] font-mono min-w-[30px]">{Math.round(zoom * 100)}%</span>
                 </div>
              </div>
-             <Button 
-              size="sm" 
-              className="h-8 shadow-sm" 
-              onClick={handleExportPNG}
-              disabled={isExporting}
-             >
-                {isExporting ? <Loader2 className="mr-2 animate-spin" /> : <Download className="mr-2" />}
-                Export PNG
-             </Button>
+             
+             <div className="flex items-center gap-2">
+               <Button 
+                variant="outline"
+                size="sm" 
+                className="h-8 shadow-sm" 
+                onClick={handleExportRelease}
+                disabled={isReleasing}
+               >
+                  {isReleasing ? <Loader2 className="mr-2 animate-spin" /> : <Rocket className="mr-2" />}
+                  Release
+               </Button>
+               <Button 
+                size="sm" 
+                className="h-8 shadow-sm" 
+                onClick={handleExportPNG}
+                disabled={isExporting}
+               >
+                  {isExporting ? <Loader2 className="mr-2 animate-spin" /> : <Download className="mr-2" />}
+                  Export PNG
+               </Button>
+             </div>
           </div>
         </header>
 
