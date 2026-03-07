@@ -26,7 +26,9 @@ import {
   Image as LucideImage,
   Sparkles,
   Settings2,
-  MousePointer2
+  MousePointer2,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
@@ -43,7 +45,7 @@ export default function TileForge() {
     canvasSize, setCanvasSize,
     zoom, setZoom,
     layers, activeLayerId, setActiveLayerId,
-    addLayer, toggleLayerMode,
+    addLayer, toggleLayerMode, reorderLayer,
     paintTile, activeTool, setActiveTool,
     backgroundImage, setBackgroundImage,
     backgroundOpacity, setBackgroundOpacity
@@ -97,7 +99,7 @@ export default function TileForge() {
             </div>
             
             <div className="space-y-1">
-              {layers.map((layer) => (
+              {layers.map((layer, index) => (
                 <div 
                   key={layer.id}
                   className={cn(
@@ -111,6 +113,26 @@ export default function TileForge() {
                     <span className={cn("flex-1 text-xs truncate", activeLayerId === layer.id ? "font-semibold text-primary" : "text-muted-foreground")}>
                       {layer.name}
                     </span>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 w-6 p-0"
+                        disabled={index === 0}
+                        onClick={(e) => { e.stopPropagation(); reorderLayer(layer.id, 'up'); }}
+                      >
+                        <ChevronUp size={12} />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 w-6 p-0"
+                        disabled={index === layers.length - 1}
+                        onClick={(e) => { e.stopPropagation(); reorderLayer(layer.id, 'down'); }}
+                      >
+                        <ChevronDown size={12} />
+                      </Button>
+                    </div>
                     <Button 
                       variant="ghost" 
                       size="sm" 
