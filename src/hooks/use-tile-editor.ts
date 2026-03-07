@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 
 export type Tileset = {
   id: string
@@ -84,15 +84,78 @@ export function useTileEditor() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5)
 
+  // Undo/Redo State
+  const [history, setHistory] = useState<Layer[][]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const isInternalUpdate = useRef(false)
+
+  // Push to history
+  const pushHistory = useCallback((newLayers: Layer[]) => {
+    const layersCopy = JSON.parse(JSON.stringify(newLayers))
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1)
+      // Limit history size to 50 items
+      if (newHistory.length >= 50) newHistory.shift()
+      return [...newHistory, layersCopy]
+    })
+    setHistoryIndex(prev => {
+      const nextIndex = prev + 1
+      return Math.min(nextIndex, 49)
+    })
+  }, [historyIndex])
+
+  const undo = useCallback(() => {
+    if (historyIndex > 0) {
+      isInternalUpdate.current = true
+      const prevState = history[historyIndex - 1]
+      setLayers(JSON.parse(JSON.stringify(prevState)))
+      setHistoryIndex(prev => prev - 1)
+    }
+  }, [history, historyIndex])
+
+  const redo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      isInternalUpdate.current = true
+      const nextState = history[historyIndex + 1]
+      setLayers(JSON.parse(JSON.stringify(nextState)))
+      setHistoryIndex(prev => prev + 1)
+    }
+  }, [history, historyIndex])
+
+  // Capture initial state
+  useEffect(() => {
+    if (history.length === 0) {
+      setHistory([JSON.parse(JSON.stringify(layers))])
+      setHistoryIndex(0)
+    }
+  }, [])
+
   // Sync grid data dimensions
   useEffect(() => {
-    setLayers(prev => prev.map(layer => {
-      if (layer.mode !== 'tilemap') return layer
-      const newData = Array(canvasSize.height).fill(null).map((_, y) => 
-        Array(canvasSize.width).fill(null).map((_, x) => (layer.tileData[y] && layer.tileData[y][x]) || null)
-      )
-      return { ...layer, tileData: newData }
-    }))
+    setLayers(prev => {
+      let changed = false
+      const next = prev.map(layer => {
+        if (layer.mode !== 'tilemap') return layer
+        
+        // Only resize if different
+        if (layer.tileData.length === canvasSize.height && 
+            layer.tileData[0]?.length === canvasSize.width) return layer
+
+        changed = true
+        const newData = Array(canvasSize.height).fill(null).map((_, y) => 
+          Array(canvasSize.width).fill(null).map((_, x) => (layer.tileData[y] && layer.tileData[y][x]) || null)
+        )
+        return { ...layer, tileData: newData }
+      })
+      
+      if (changed) {
+        // Resize is a major state change, we push history in the component usually, 
+        // but since this is automatic we'll just return it.
+        // For auto-resizing we might not want to flood history, but let's push for safety.
+        return next
+      }
+      return prev
+    })
   }, [canvasSize.width, canvasSize.height])
 
   const addTileset = useCallback((file: File | string, name?: string) => {
@@ -271,9 +334,11 @@ export function useTileEditor() {
       tileData: Array(canvasSize.height).fill(null).map(() => Array(canvasSize.width).fill(null)),
       objects: []
     }
-    setLayers(prev => [newLayer, ...prev])
+    const nextLayers = [newLayer, ...layers]
+    setLayers(nextLayers)
     setActiveLayerId(newLayer.id)
-  }, [layers.length, canvasSize])
+    pushHistory(nextLayers)
+  }, [layers, canvasSize, pushHistory])
 
   const deleteLayer = useCallback((id: string) => {
     setLayers(prev => {
@@ -282,21 +347,30 @@ export function useTileEditor() {
       if (id === activeLayerId) {
         setActiveLayerId(nextLayers[0].id)
       }
+      pushHistory(nextLayers)
       return nextLayers
     })
-  }, [activeLayerId])
+  }, [activeLayerId, pushHistory])
 
   const toggleLayerVisibility = useCallback((id: string) => {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l))
   }, [])
 
   const toggleLayerMode = useCallback((id: string) => {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, mode: l.mode === 'tilemap' ? 'object' : 'tilemap' } : l))
-  }, [])
+    setLayers(prev => {
+      const next = prev.map(l => l.id === id ? { ...l, mode: l.mode === 'tilemap' ? 'object' : 'tilemap' } : l)
+      pushHistory(next)
+      return next
+    })
+  }, [pushHistory])
 
   const renameLayer = useCallback((id: string, name: string) => {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, name } : l))
-  }, [])
+    setLayers(prev => {
+      const next = prev.map(l => l.id === id ? { ...l, name } : l)
+      pushHistory(next)
+      return next
+    })
+  }, [pushHistory])
 
   const reorderLayer = useCallback((id: string, direction: 'up' | 'down') => {
     setLayers(prev => {
@@ -308,9 +382,10 @@ export function useTileEditor() {
       } else if (direction === 'down' && index < prev.length - 1) {
         [newLayers[index], newLayers[index + 1]] = [newLayers[index + 1], newLayers[index]]
       }
+      pushHistory(newLayers)
       return newLayers
     })
-  }, [])
+  }, [pushHistory])
 
   const importProject = useCallback((project: any) => {
     if (project.tilesets) setTilesets(project.tilesets)
@@ -321,7 +396,11 @@ export function useTileEditor() {
     if (project.activeLayerId) setActiveLayerId(project.activeLayerId)
     if (project.backgroundImage) setBackgroundImage(project.backgroundImage)
     if (project.backgroundOpacity) setBackgroundOpacity(project.backgroundOpacity)
-  }, [])
+    
+    if (project.layers) {
+      pushHistory(project.layers)
+    }
+  }, [pushHistory])
 
   return {
     tilesets, setTilesets, addTileset,
@@ -338,6 +417,10 @@ export function useTileEditor() {
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
-    importProject
+    importProject,
+    // Undo/Redo
+    undo, redo, pushHistory,
+    canUndo: historyIndex > 0,
+    canRedo: historyIndex < history.length - 1
   }
 }

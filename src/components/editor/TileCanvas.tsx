@@ -13,9 +13,10 @@ interface TileCanvasProps {
   tileSize: { width: number; height: number }
   zoom: number
   onPaint: (x: number, y: number) => void
-  activeTool: 'paint' | 'eraser' | 'select'
+  activeTool: 'paint' | 'eraser' | 'select' | 'scale'
   selection: TileSelection | null
   selectedComponentId: string | null
+  onFinishAction?: () => void
 }
 
 export function TileCanvas({ 
@@ -29,7 +30,8 @@ export function TileCanvas({
   onPaint, 
   activeTool, 
   selection,
-  selectedComponentId
+  selectedComponentId,
+  onFinishAction
 }: TileCanvasProps) {
   const [isMouseDown, setIsMouseDown] = useState(false)
   const [hoverPos, setHoverPos] = useState<{ x: number, y: number } | null>(null)
@@ -45,10 +47,15 @@ export function TileCanvas({
   }
 
   useEffect(() => {
-    const up = () => setIsMouseDown(false)
+    const up = () => {
+      if (isMouseDown && onFinishAction) {
+        onFinishAction()
+      }
+      setIsMouseDown(false)
+    }
     window.addEventListener('mouseup', up)
     return () => window.removeEventListener('mouseup', up)
-  }, [])
+  }, [isMouseDown, onFinishAction])
 
   const activeLayer = layers.find(l => l.id === activeLayerId)
   const baseWidth = canvasSize.width * tileSize.width

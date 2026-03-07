@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
-import { useTileEditor, Layer } from '@/hooks/use-tile-editor'
+import React, { useState, useEffect, useCallback } from 'react'
+import { useTileEditor } from '@/hooks/use-tile-editor'
 import { TilesetViewer } from '@/components/editor/TilesetViewer'
 import { TileCanvas } from '@/components/editor/TileCanvas'
 import { Button } from '@/components/ui/button'
@@ -55,7 +55,9 @@ import {
   FolderOpen,
   Rocket,
   Eye as ViewIcon,
-  Trash2
+  Trash2,
+  Undo2,
+  Redo2
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -78,7 +80,9 @@ export default function TileForge() {
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage,
     backgroundOpacity, setBackgroundOpacity,
-    importProject
+    importProject,
+    // Undo/Redo
+    undo, redo, pushHistory, canUndo, canRedo
   } = useTileEditor()
 
   const { toast } = useToast()
@@ -97,6 +101,25 @@ export default function TileForge() {
 
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
   const activeLayer = layers.find(l => l.id === activeLayerId)
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          redo()
+        } else {
+          undo()
+        }
+        e.preventDefault()
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        redo()
+        e.preventDefault()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [undo, redo])
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -765,6 +788,32 @@ export default function TileForge() {
 
              <Separator orientation="vertical" className="h-6" />
 
+             {/* Undo/Redo Controls */}
+             <div className="flex items-center gap-1 bg-secondary/30 p-1 rounded-lg border">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0" 
+                  onClick={undo} 
+                  disabled={!canUndo}
+                  title="Undo (Ctrl+Z)"
+                >
+                  <Undo2 size={16} />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0" 
+                  onClick={redo} 
+                  disabled={!canRedo}
+                  title="Redo (Ctrl+Y)"
+                >
+                  <Redo2 size={16} />
+                </Button>
+             </div>
+
+             <Separator orientation="vertical" className="h-6" />
+
              <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <div className="flex items-center gap-1"><Box size={14} /> <span>Mode: {activeLayer?.mode?.toUpperCase() || 'N/A'}</span></div>
              </div>
@@ -825,6 +874,7 @@ export default function TileForge() {
           activeTool={activeTool}
           selection={selection}
           selectedComponentId={selectedComponentId}
+          onFinishAction={() => pushHistory(layers)}
         />
       </main>
 
