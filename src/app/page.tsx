@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from 'react'
-import { useTileEditor } from '@/hooks/use-tile-editor'
+import { useTileEditor, Layer } from '@/hooks/use-tile-editor'
 import { TilesetViewer } from '@/components/editor/TilesetViewer'
 import { TileCanvas } from '@/components/editor/TileCanvas'
 import { Button } from '@/components/ui/button'
@@ -53,7 +53,7 @@ export default function TileForge() {
     canvasSize, setCanvasSize,
     zoom, setZoom,
     layers, activeLayerId, setActiveLayerId,
-    addLayer, toggleLayerMode, reorderLayer,
+    addLayer, toggleLayerMode, renameLayer, reorderLayer,
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage,
@@ -64,6 +64,9 @@ export default function TileForge() {
   const { toast } = useToast()
   const [isExporting, setIsExporting] = useState(false)
   const [isProjectLoading, setIsProjectLoading] = useState(false)
+  
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
+  const [editName, setEditName] = useState("")
 
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
   const activeLayer = layers.find(l => l.id === activeLayerId)
@@ -232,6 +235,13 @@ export default function TileForge() {
     reader.readAsText(file)
   }
 
+  const handleFinishEditingLayerName = () => {
+    if (editingLayerId && editName.trim()) {
+      renameLayer(editingLayerId, editName.trim())
+    }
+    setEditingLayerId(null)
+  }
+
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-body text-foreground">
       {/* Left Sidebar */}
@@ -340,9 +350,31 @@ export default function TileForge() {
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">{layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}</span>
-                    <span className={cn("flex-1 text-xs truncate", activeLayerId === layer.id ? "font-semibold text-primary" : "text-muted-foreground")}>
-                      {layer.name}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      {editingLayerId === layer.id ? (
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onBlur={handleFinishEditingLayerName}
+                          onKeyDown={(e) => e.key === 'Enter' && handleFinishEditingLayerName()}
+                          autoFocus
+                          className="h-6 text-[10px] px-1 py-0"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span 
+                          className={cn("block text-xs truncate", activeLayerId === layer.id ? "font-semibold text-primary" : "text-muted-foreground")}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            setEditingLayerId(layer.id);
+                            setEditName(layer.name);
+                          }}
+                          title="Double-click to rename"
+                        >
+                          {layer.name}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button 
                         variant="ghost" 

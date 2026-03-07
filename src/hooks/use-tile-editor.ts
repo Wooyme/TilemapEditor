@@ -279,6 +279,10 @@ export function useTileEditor() {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, mode: l.mode === 'tilemap' ? 'object' : 'tilemap' } : l))
   }, [])
 
+  const renameLayer = useCallback((id: string, name: string) => {
+    setLayers(prev => prev.map(l => l.id === id ? { ...l, name } : l))
+  }, [])
+
   const reorderLayer = useCallback((id: string, direction: 'up' | 'down') => {
     setLayers(prev => {
       const index = prev.findIndex(l => l.id === id)
@@ -315,7 +319,7 @@ export function useTileEditor() {
     canvasSize, setCanvasSize,
     zoom, setZoom,
     layers, setLayers, activeLayerId, setActiveLayerId,
-    addLayer, toggleLayerMode, reorderLayer,
+    addLayer, toggleLayerMode, renameLayer, reorderLayer,
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
