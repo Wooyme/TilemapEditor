@@ -18,6 +18,16 @@ import {
   DialogTitle,
   DialogDescription
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { 
   Upload, 
   Paintbrush, 
@@ -82,6 +92,8 @@ export default function TileForge() {
 
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
+
+  const [layerToDelete, setLayerToDelete] = useState<string | null>(null)
 
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
   const activeLayer = layers.find(l => l.id === activeLayerId)
@@ -415,6 +427,17 @@ export default function TileForge() {
     setEditingLayerId(null)
   }
 
+  const handleDeleteLayerConfirm = () => {
+    if (layerToDelete) {
+      deleteLayer(layerToDelete)
+      setLayerToDelete(null)
+      toast({
+        title: "Layer Deleted",
+        description: "The layer has been removed from the project.",
+      })
+    }
+  }
+
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-body text-foreground">
       {/* Left Sidebar */}
@@ -578,7 +601,7 @@ export default function TileForge() {
                         variant="ghost" 
                         size="sm" 
                         className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={(e) => { e.stopPropagation(); deleteLayer(layer.id); }}
+                        onClick={(e) => { e.stopPropagation(); setLayerToDelete(layer.id); }}
                         disabled={layers.length <= 1}
                       >
                         <Trash2 size={12} />
@@ -804,6 +827,27 @@ export default function TileForge() {
           selectedComponentId={selectedComponentId}
         />
       </main>
+
+      {/* Layer Delete Confirmation */}
+      <AlertDialog open={layerToDelete !== null} onOpenChange={(open) => !open && setLayerToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this layer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. All tiles and objects placed on this layer will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteLayerConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Layer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
