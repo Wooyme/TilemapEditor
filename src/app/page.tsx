@@ -1,6 +1,6 @@
 "use client"
 
-import React from 'react'
+import React, { useState } from 'react'
 import { useTileEditor } from '@/hooks/use-tile-editor'
 import { TilesetViewer } from '@/components/editor/TilesetViewer'
 import { TileCanvas } from '@/components/editor/TileCanvas'
@@ -29,9 +29,12 @@ import {
   MousePointer2,
   ChevronUp,
   ChevronDown,
-  Scaling
+  Scaling,
+  Download,
+  Loader2
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
+import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
 export default function TileForge() {
@@ -52,8 +55,97 @@ export default function TileForge() {
     backgroundOpacity, setBackgroundOpacity
   } = useTileEditor()
 
+  const { toast } = useToast()
+  const [isExporting, setIsExporting] = useState(false)
+
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
   const activeLayer = layers.find(l => l.id === activeLayerId)
+
+  const handleExport = async () => {
+    setIsExporting(true)
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = canvasSize.width * tileSize.width
+      canvas.height = canvasSize.height * tileSize.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error("Could not initialize canvas context")
+
+      // Clear with transparency or white? Let's go with transparency but optional white background
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      // Helper to load images
+      const loadImage = (url: string): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image()
+          img.crossOrigin = "anonymous" // For potential remote tilesets
+          img.onload = () => resolve(img)
+          img.onerror = reject
+          img.src = url
+        })
+      }
+
+      // Pre-cache all needed images
+      const tilesetCache = new Map<string, HTMLImageElement>()
+      for (const ts of tilesets) {
+        tilesetCache.set(ts.id, await loadImage(ts.url))
+      }
+
+      const componentCache = new Map<string, HTMLImageElement>()
+      for (const comp of components) {
+        componentCache.set(comp.id, await loadImage(comp.url))
+      }
+
+      // Draw layers from bottom to top
+      const renderLayers = [...layers].reverse()
+      for (const layer of renderLayers) {
+        if (!layer.visible) continue
+
+        if (layer.mode === 'tilemap') {
+          layer.tileData.forEach((row, y) => {
+            row.forEach((cell, x) => {
+              if (!cell) return
+              const img = tilesetCache.get(cell.tilesetId)
+              if (!img) return
+              
+              ctx.drawImage(
+                img,
+                cell.tx * tileSize.width, cell.ty * tileSize.height, tileSize.width, tileSize.height,
+                x * tileSize.width, y * tileSize.height, tileSize.width, tileSize.height
+              )
+            })
+          })
+        } else {
+          // Object mode
+          layer.objects.forEach((obj) => {
+            const img = componentCache.get(obj.componentId)
+            if (!img) return
+            ctx.drawImage(img, obj.x, obj.y, obj.width, obj.height)
+          })
+        }
+      }
+
+      // Trigger download
+      const dataUrl = canvas.toDataURL('image/png')
+      const link = document.createElement('a')
+      link.download = 'tileforge-map.png'
+      link.href = dataUrl
+      link.click()
+
+      toast({
+        title: "Export Successful",
+        description: "Your map has been downloaded as a PNG.",
+      })
+    } catch (error) {
+      console.error(error)
+      toast({
+        variant: "destructive",
+        title: "Export Failed",
+        description: "There was an error generating the image.",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-body text-foreground">
@@ -314,7 +406,15 @@ export default function TileForge() {
                   <span className="text-[10px] font-mono min-w-[30px]">{Math.round(zoom * 100)}%</span>
                 </div>
              </div>
-             <Button size="sm" className="h-8 shadow-sm">Export PNG</Button>
+             <Button 
+              size="sm" 
+              className="h-8 shadow-sm" 
+              onClick={handleExport}
+              disabled={isExporting}
+             >
+                {isExporting ? <Loader2 className="mr-2 animate-spin" /> : <Download className="mr-2" />}
+                Export PNG
+             </Button>
           </div>
         </header>
 
