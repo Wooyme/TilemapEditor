@@ -170,8 +170,18 @@ export default function TileForge() {
   }
 
   const handleExportRelease = async () => {
+    if (!('showDirectoryPicker' in window)) {
+      toast({
+        variant: "destructive",
+        title: "Browser Incompatible",
+        description: "Your browser does not support the File System Access API. Please use a modern browser like Chrome or Edge.",
+      })
+      return
+    }
+
     setIsReleasing(true)
     try {
+      const dirHandle = await (window as any).showDirectoryPicker();
       const mapWidth = canvasSize.width * tileSize.width
       const mapHeight = canvasSize.height * tileSize.height
 
@@ -185,6 +195,23 @@ export default function TileForge() {
         })
       }
 
+      // 1. Export Tilesets as PNG files
+      const tilesetExportData = await Promise.all(tilesets.map(async (ts) => {
+        const response = await fetch(ts.url)
+        const blob = await response.blob()
+        const fileName = `tileset-${ts.id}.png`
+        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true })
+        const writable = await fileHandle.createWritable()
+        await writable.write(blob)
+        await writable.close()
+        return {
+          id: ts.id,
+          name: ts.name,
+          imagePath: fileName
+        }
+      }))
+
+      // 2. Export Layers
       const componentCache = new Map<string, HTMLImageElement>()
       for (const comp of components) {
         componentCache.set(comp.id, await loadImage(comp.url))
@@ -210,46 +237,52 @@ export default function TileForge() {
           layer.objects.forEach(obj => {
             const img = componentCache.get(obj.componentId)
             if (!img) return
-            // Draw only if it fits/overlaps the canvas bounds
             ctx.drawImage(img, obj.x, obj.y, obj.width, obj.height)
           })
+
+          const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'))
+          const fileName = `layer-${layer.id}.png`
+          const fileHandle = await dirHandle.getFileHandle(fileName, { create: true })
+          const writable = await fileHandle.createWritable()
+          await writable.write(blob)
+          await writable.close()
 
           return {
             id: layer.id,
             name: layer.name,
             type: 'baked_objects',
             visible: layer.visible,
-            image: canvas.toDataURL('image/png')
+            imagePath: fileName
           }
         }
       }))
 
+      // 3. Export release.json
       const releasePackage = {
         version: "1.0-release",
         name: "TileForge Project Release",
         canvasSize,
         tileSize,
+        tilesets: tilesetExportData,
         layers: releaseLayers
       }
 
-      const blob = new Blob([JSON.stringify(releasePackage, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `release-${new Date().toISOString().slice(0,10)}.json`
-      link.click()
-      URL.revokeObjectURL(url)
+      const jsonFileHandle = await dirHandle.getFileHandle('release.json', { create: true })
+      const jsonWritable = await jsonFileHandle.createWritable()
+      await jsonWritable.write(JSON.stringify(releasePackage, null, 2))
+      await jsonWritable.close()
 
       toast({
-        title: "Release Exported",
-        description: "Baked object layers and tilemap data are ready.",
+        title: "Release Successful",
+        description: "All files have been written to the selected directory.",
       })
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') return // User cancelled
       console.error(error)
       toast({
         variant: "destructive",
         title: "Release Failed",
-        description: "Could not bake object layers.",
+        description: error.message || "Could not write files to directory.",
       })
     } finally {
       setIsReleasing(false)
