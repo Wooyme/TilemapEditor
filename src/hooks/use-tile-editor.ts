@@ -275,6 +275,21 @@ export function useTileEditor() {
     setActiveLayerId(newLayer.id)
   }, [layers.length, canvasSize])
 
+  const deleteLayer = useCallback((id: string) => {
+    setLayers(prev => {
+      if (prev.length <= 1) return prev
+      const nextLayers = prev.filter(l => l.id !== id)
+      if (id === activeLayerId) {
+        setActiveLayerId(nextLayers[0].id)
+      }
+      return nextLayers
+    })
+  }, [activeLayerId])
+
+  const toggleLayerVisibility = useCallback((id: string) => {
+    setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l))
+  }, [])
+
   const toggleLayerMode = useCallback((id: string) => {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, mode: l.mode === 'tilemap' ? 'object' : 'tilemap' } : l))
   }, [])
@@ -319,7 +334,7 @@ export function useTileEditor() {
     canvasSize, setCanvasSize,
     zoom, setZoom,
     layers, setLayers, activeLayerId, setActiveLayerId,
-    addLayer, toggleLayerMode, renameLayer, reorderLayer,
+    addLayer, deleteLayer, toggleLayerVisibility, toggleLayerMode, renameLayer, reorderLayer,
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,

@@ -44,7 +44,8 @@ import {
   FileJson,
   FolderOpen,
   Rocket,
-  Eye as ViewIcon
+  Eye as ViewIcon,
+  Trash2
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -62,7 +63,7 @@ export default function TileForge() {
     canvasSize, setCanvasSize,
     zoom, setZoom,
     layers, activeLayerId, setActiveLayerId,
-    addLayer, toggleLayerMode, renameLayer, reorderLayer,
+    addLayer, deleteLayer, toggleLayerVisibility, toggleLayerMode, renameLayer, reorderLayer,
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage,
@@ -521,7 +522,14 @@ export default function TileForge() {
                   onClick={() => setActiveLayerId(layer.id)}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0 text-muted-foreground"
+                      onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
+                    >
+                      {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </Button>
                     <div className="flex-1 min-w-0">
                       {editingLayerId === layer.id ? (
                         <Input
@@ -565,6 +573,15 @@ export default function TileForge() {
                         onClick={(e) => { e.stopPropagation(); reorderLayer(layer.id, 'down'); }}
                       >
                         <ChevronDown size={12} />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={(e) => { e.stopPropagation(); deleteLayer(layer.id); }}
+                        disabled={layers.length <= 1}
+                      >
+                        <Trash2 size={12} />
                       </Button>
                     </div>
                     <Button 
