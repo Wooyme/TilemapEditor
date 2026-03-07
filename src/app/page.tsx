@@ -1,3 +1,4 @@
+
 "use client"
 
 import React from 'react'
@@ -23,7 +24,8 @@ import {
   Plus,
   Box,
   Image as LucideImage,
-  Sparkles
+  Sparkles,
+  Settings2
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
@@ -194,17 +196,72 @@ export default function TileForge() {
 
       {/* Main Canvas Area */}
       <main className="flex-1 flex flex-col relative min-w-0">
-        <header className="h-14 border-b bg-white flex items-center justify-between px-6 shrink-0">
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-             <div className="flex items-center gap-1"><Grid3X3 size={14} /> <span>{canvasSize.width}x{canvasSize.height} Tiles</span></div>
-             <div className="flex items-center gap-1"><Box size={14} /> <span>Mode: {activeLayer?.mode?.toUpperCase() || 'N/A'}</span></div>
-          </div>
-          <div className="flex items-center gap-3">
-             <div className="flex items-center gap-2">
-                <Label className="text-[10px]">Zoom</Label>
-                <Slider className="w-24" value={[zoom]} min={0.25} max={4} step={0.25} onValueChange={([v]) => setZoom(v)} />
+        <header className="h-14 border-b bg-white flex items-center justify-between px-4 shrink-0 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-4 shrink-0">
+             {/* Workspace Settings */}
+             <div className="flex items-center gap-3 bg-secondary/30 p-1 px-2 rounded-lg border">
+                <div className="flex items-center gap-2 border-r pr-3">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <Settings2 size={10} /> Tile
+                  </Label>
+                  <div className="flex items-center gap-1">
+                    <Input 
+                      type="number" 
+                      className="w-12 h-7 text-[10px] px-1 bg-white" 
+                      value={tileSize.width} 
+                      onChange={(e) => setTileSize(prev => ({ ...prev, width: parseInt(e.target.value) || 1 }))} 
+                      title="Tile Width (px)"
+                    />
+                    <span className="text-[10px] text-muted-foreground">x</span>
+                    <Input 
+                      type="number" 
+                      className="w-12 h-7 text-[10px] px-1 bg-white" 
+                      value={tileSize.height} 
+                      onChange={(e) => setTileSize(prev => ({ ...prev, height: parseInt(e.target.value) || 1 }))} 
+                      title="Tile Height (px)"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                    <Grid3X3 size={10} /> Grid
+                  </Label>
+                  <div className="flex items-center gap-1">
+                    <Input 
+                      type="number" 
+                      className="w-12 h-7 text-[10px] px-1 bg-white" 
+                      value={canvasSize.width} 
+                      onChange={(e) => setCanvasSize(prev => ({ ...prev, width: parseInt(e.target.value) || 1 }))} 
+                      title="Grid Columns"
+                    />
+                    <span className="text-[10px] text-muted-foreground">x</span>
+                    <Input 
+                      type="number" 
+                      className="w-12 h-7 text-[10px] px-1 bg-white" 
+                      value={canvasSize.height} 
+                      onChange={(e) => setCanvasSize(prev => ({ ...prev, height: parseInt(e.target.value) || 1 }))} 
+                      title="Grid Rows"
+                    />
+                  </div>
+                </div>
              </div>
-             <Button size="sm">Export PNG</Button>
+
+             <Separator orientation="vertical" className="h-6" />
+
+             <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1"><Box size={14} /> <span>Mode: {activeLayer?.mode?.toUpperCase() || 'N/A'}</span></div>
+             </div>
+          </div>
+
+          <div className="flex items-center gap-4 shrink-0 ml-4">
+             <div className="flex items-center gap-2">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase">Zoom</Label>
+                <div className="flex items-center gap-2 bg-secondary/20 p-1 px-2 rounded-md border">
+                  <Slider className="w-20" value={[zoom]} min={0.25} max={4} step={0.1} onValueChange={([v]) => setZoom(v)} />
+                  <span className="text-[10px] font-mono min-w-[30px]">{Math.round(zoom * 100)}%</span>
+                </div>
+             </div>
+             <Button size="sm" className="h-8 shadow-sm">Export PNG</Button>
           </div>
         </header>
 
