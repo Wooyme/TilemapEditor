@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { useTileEditor } from '@/hooks/use-tile-editor'
+import { useTileEditor, Layer } from '@/hooks/use-tile-editor'
 import { TilesetViewer } from '@/components/editor/TilesetViewer'
 import { TileCanvas } from '@/components/editor/TileCanvas'
 import { Button } from '@/components/ui/button'
@@ -57,7 +57,8 @@ import {
   Eye as ViewIcon,
   Trash2,
   Undo2,
-  Redo2
+  Redo2,
+  SeparatorHorizontal
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -75,13 +76,13 @@ export default function TileForge() {
     canvasSize, setCanvasSize,
     zoom, setZoom,
     layers, activeLayerId, setActiveLayerId,
+    splitLayerId, setSplitLayerId,
     addLayer, deleteLayer, toggleLayerVisibility, toggleLayerMode, renameLayer, reorderLayer,
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage,
     backgroundOpacity, setBackgroundOpacity,
     importProject,
-    // Undo/Redo
     undo, redo, pushHistory, canUndo, canRedo
   } = useTileEditor()
 
@@ -137,7 +138,7 @@ export default function TileForge() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [tilesets.length, components.length, layers])
 
-  const generateCompositedCanvas = async (): Promise<HTMLCanvasElement> => {
+  const compositeLayers = async (layersToComposite: Layer[]): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas')
     canvas.width = canvasSize.width * tileSize.width
     canvas.height = canvasSize.height * tileSize.height
@@ -166,8 +167,9 @@ export default function TileForge() {
       componentCache.set(comp.id, await loadImage(comp.url))
     }
 
-    const renderLayers = [...layers].reverse()
-    for (const layer of renderLayers) {
+    // Render layers in reverse order (bottom-most first)
+    const renderOrder = [...layersToComposite].reverse()
+    for (const layer of renderOrder) {
       if (!layer.visible) continue
 
       if (layer.mode === 'tilemap') {
@@ -193,6 +195,10 @@ export default function TileForge() {
       }
     }
     return canvas
+  }
+
+  const generateCompositedCanvas = async (): Promise<HTMLCanvasElement> => {
+    return compositeLayers(layers)
   }
 
   const handlePreview = async () => {
@@ -281,7 +287,7 @@ export default function TileForge() {
         }
       }))
 
-      // 2. Export Layers
+      // 2. Export Layers and individual bakes
       const componentCache = new Map<string, HTMLImageElement>()
       for (const comp of components) {
         componentCache.set(comp.id, await loadImage(comp.url))
@@ -297,7 +303,6 @@ export default function TileForge() {
             data: layer.tileData
           }
         } else {
-          // Bake object layer to a single picture cropped to canvas size
           const canvas = document.createElement('canvas')
           canvas.width = mapWidth
           canvas.height = mapHeight
@@ -327,14 +332,51 @@ export default function TileForge() {
         }
       }))
 
-      // 3. Export release.json
+      // 3. Export Foreground/Background Composites if split is set
+      let splitData = null
+      if (splitLayerId) {
+        const splitIdx = layers.findIndex(l => l.id === splitLayerId)
+        if (splitIdx !== -1) {
+          const foregroundLayers = layers.slice(0, splitIdx + 1)
+          const backgroundLayers = layers.slice(splitIdx + 1)
+
+          // Background Composite
+          if (backgroundLayers.length > 0) {
+            const bgCanvas = await compositeLayers(backgroundLayers)
+            const bgBlob = await new Promise<Blob>((resolve) => bgCanvas.toBlob((b) => resolve(b!), 'image/png'))
+            const bgHandle = await dirHandle.getFileHandle('background-composite.png', { create: true })
+            const bgWritable = await bgHandle.createWritable()
+            await bgWritable.write(bgBlob)
+            await bgWritable.close()
+          }
+
+          // Foreground Composite
+          if (foregroundLayers.length > 0) {
+            const fgCanvas = await compositeLayers(foregroundLayers)
+            const fgBlob = await new Promise<Blob>((resolve) => fgCanvas.toBlob((b) => resolve(b!), 'image/png'))
+            const fgHandle = await dirHandle.getFileHandle('foreground-composite.png', { create: true })
+            const fgWritable = await fgHandle.createWritable()
+            await fgWritable.write(fgBlob)
+            await fgWritable.close()
+          }
+
+          splitData = {
+            splitLayerId,
+            backgroundPath: backgroundLayers.length > 0 ? 'background-composite.png' : null,
+            foregroundPath: foregroundLayers.length > 0 ? 'foreground-composite.png' : null
+          }
+        }
+      }
+
+      // 4. Export release.json
       const releasePackage = {
-        version: "1.0-release",
+        version: "1.1-release",
         name: "TileForge Project Release",
         canvasSize,
         tileSize,
         tilesets: tilesetExportData,
-        layers: releaseLayers
+        layers: releaseLayers,
+        split: splitData
       }
 
       const jsonFileHandle = await dirHandle.getFileHandle('release.json', { create: true })
@@ -347,7 +389,7 @@ export default function TileForge() {
         description: "All files have been written to the selected directory.",
       })
     } catch (error: any) {
-      if (error.name === 'AbortError') return // User cancelled
+      if (error.name === 'AbortError') return 
       console.error(error)
       toast({
         variant: "destructive",
@@ -384,13 +426,14 @@ export default function TileForge() {
       })))
 
       const projectData = {
-        version: "1.0",
+        version: "1.1",
         tilesets: serializedTilesets,
         components,
         layers,
         tileSize,
         canvasSize,
         activeLayerId,
+        splitLayerId,
         backgroundImage: backgroundImage ? await urlToBase64(backgroundImage) : null,
         backgroundOpacity
       }
@@ -557,91 +600,112 @@ export default function TileForge() {
               </Button>
             </div>
             
-            <div className="space-y-1">
-              {layers.map((layer, index) => (
-                <div 
-                  key={layer.id}
-                  className={cn(
-                    "group flex flex-col gap-1 p-2 rounded-md transition-colors cursor-pointer",
-                    activeLayerId === layer.id ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-secondary/50"
-                  )}
-                  onClick={() => setActiveLayerId(layer.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 w-6 p-0 text-muted-foreground"
-                      onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
-                    >
-                      {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
-                    </Button>
-                    <div className="flex-1 min-w-0">
-                      {editingLayerId === layer.id ? (
-                        <Input
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onBlur={handleFinishEditingLayerName}
-                          onKeyDown={(e) => e.key === 'Enter' && handleFinishEditingLayerName()}
-                          autoFocus
-                          className="h-6 text-[10px] px-1 py-0"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <span 
-                          className={cn("block text-xs truncate", activeLayerId === layer.id ? "font-semibold text-primary" : "text-muted-foreground")}
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            setEditingLayerId(layer.id);
-                            setEditName(layer.name);
-                          }}
-                          title="Double-click to rename"
-                        >
-                          {layer.name}
-                        </span>
+            <div className="space-y-1 relative">
+              {layers.map((layer, index) => {
+                const isSplitPoint = splitLayerId === layer.id
+                return (
+                  <React.Fragment key={layer.id}>
+                    <div 
+                      className={cn(
+                        "group flex flex-col gap-1 p-2 rounded-md transition-colors cursor-pointer relative",
+                        activeLayerId === layer.id ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-secondary/50",
+                        isSplitPoint && "bg-accent/5 ring-1 ring-accent/20"
                       )}
-                    </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0"
-                        disabled={index === 0}
-                        onClick={(e) => { e.stopPropagation(); reorderLayer(layer.id, 'up'); }}
-                      >
-                        <ChevronUp size={12} />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0"
-                        disabled={index === layers.length - 1}
-                        onClick={(e) => { e.stopPropagation(); reorderLayer(layer.id, 'down'); }}
-                      >
-                        <ChevronDown size={12} />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={(e) => { e.stopPropagation(); setLayerToDelete(layer.id); }}
-                        disabled={layers.length <= 1}
-                      >
-                        <Trash2 size={12} />
-                      </Button>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 px-1 text-[10px]"
-                      onClick={(e) => { e.stopPropagation(); toggleLayerMode(layer.id); }}
+                      onClick={() => setActiveLayerId(layer.id)}
                     >
-                      {layer.mode === 'tilemap' ? <Grid3X3 size={10} className="mr-1" /> : <Box size={10} className="mr-1" />}
-                      {layer.mode.toUpperCase()}
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 w-6 p-0 text-muted-foreground"
+                          onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
+                        >
+                          {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                        </Button>
+                        <div className="flex-1 min-w-0">
+                          {editingLayerId === layer.id ? (
+                            <Input
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              onBlur={handleFinishEditingLayerName}
+                              onKeyDown={(e) => e.key === 'Enter' && handleFinishEditingLayerName()}
+                              autoFocus
+                              className="h-6 text-[10px] px-1 py-0"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <span 
+                              className={cn("block text-xs truncate", activeLayerId === layer.id ? "font-semibold text-primary" : "text-muted-foreground")}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setEditingLayerId(layer.id);
+                                setEditName(layer.name);
+                              }}
+                              title="Double-click to rename"
+                            >
+                              {layer.name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className={cn("h-6 w-6 p-0", isSplitPoint ? "text-accent" : "text-muted-foreground")}
+                            onClick={(e) => { e.stopPropagation(); setSplitLayerId(isSplitPoint ? null : layer.id); }}
+                            title="Set as Background/Foreground Split Point"
+                          >
+                            <SeparatorHorizontal size={14} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0"
+                            disabled={index === 0}
+                            onClick={(e) => { e.stopPropagation(); reorderLayer(layer.id, 'up'); }}
+                          >
+                            <ChevronUp size={12} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0"
+                            disabled={index === layers.length - 1}
+                            onClick={(e) => { e.stopPropagation(); reorderLayer(layer.id, 'down'); }}
+                          >
+                            <ChevronDown size={12} />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => { e.stopPropagation(); setLayerToDelete(layer.id); }}
+                            disabled={layers.length <= 1}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 px-1 text-[10px]"
+                          onClick={(e) => { e.stopPropagation(); toggleLayerMode(layer.id); }}
+                        >
+                          {layer.mode === 'tilemap' ? <Grid3X3 size={10} className="mr-1" /> : <Box size={10} className="mr-1" />}
+                          {layer.mode.toUpperCase()}
+                        </Button>
+                      </div>
+                    </div>
+                    {isSplitPoint && (
+                      <div className="px-2 py-1 flex items-center gap-2">
+                        <Separator className="flex-1 bg-accent/40" />
+                        <span className="text-[9px] uppercase font-bold text-accent/60 whitespace-nowrap">Background Split</span>
+                        <Separator className="flex-1 bg-accent/40" />
+                      </div>
+                    )}
+                  </React.Fragment>
+                )
+              })}
             </div>
           </section>
 
@@ -738,7 +802,6 @@ export default function TileForge() {
       <main className="flex-1 flex flex-col relative min-w-0">
         <header className="h-14 border-b bg-white flex items-center justify-between px-4 shrink-0 overflow-x-auto no-scrollbar">
           <div className="flex items-center gap-4 shrink-0">
-             {/* Workspace Settings */}
              <div className="flex items-center gap-3 bg-secondary/30 p-1 px-2 rounded-lg border">
                 <div className="flex items-center gap-2 border-r pr-3">
                   <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
@@ -788,7 +851,6 @@ export default function TileForge() {
 
              <Separator orientation="vertical" className="h-6" />
 
-             {/* Undo/Redo Controls */}
              <div className="flex items-center gap-1 bg-secondary/30 p-1 rounded-lg border">
                 <Button 
                   variant="ghost" 

@@ -78,6 +78,7 @@ export function useTileEditor() {
     { id: 'layer-1', name: 'Background', visible: true, mode: 'tilemap', tileData: [], objects: [] }
   ])
   const [activeLayerId, setActiveLayerId] = useState<string>('layer-1')
+  const [splitLayerId, setSplitLayerId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<Tool>('paint')
   const [scaleDirection, setScaleDirection] = useState<ScaleDirection>('up')
 
@@ -94,7 +95,6 @@ export function useTileEditor() {
     const layersCopy = JSON.parse(JSON.stringify(newLayers))
     setHistory(prev => {
       const newHistory = prev.slice(0, historyIndex + 1)
-      // Limit history size to 50 items
       if (newHistory.length >= 50) newHistory.shift()
       return [...newHistory, layersCopy]
     })
@@ -122,7 +122,6 @@ export function useTileEditor() {
     }
   }, [history, historyIndex])
 
-  // Capture initial state
   useEffect(() => {
     if (history.length === 0) {
       setHistory([JSON.parse(JSON.stringify(layers))])
@@ -130,14 +129,11 @@ export function useTileEditor() {
     }
   }, [])
 
-  // Sync grid data dimensions
   useEffect(() => {
     setLayers(prev => {
       let changed = false
       const next = prev.map(layer => {
         if (layer.mode !== 'tilemap') return layer
-        
-        // Only resize if different
         if (layer.tileData.length === canvasSize.height && 
             layer.tileData[0]?.length === canvasSize.width) return layer
 
@@ -147,13 +143,7 @@ export function useTileEditor() {
         )
         return { ...layer, tileData: newData }
       })
-      
-      if (changed) {
-        // Resize is a major state change, we push history in the component usually, 
-        // but since this is automatic we'll just return it.
-        // For auto-resizing we might not want to flood history, but let's push for safety.
-        return next
-      }
+      if (changed) return next
       return prev
     })
   }, [canvasSize.width, canvasSize.height])
@@ -179,7 +169,6 @@ export function useTileEditor() {
   const addComponentSource = useCallback(async (file: File) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
-    
     await new Promise((resolve) => {
       img.onload = resolve
       img.src = url
@@ -252,7 +241,6 @@ export function useTileEditor() {
   const paintTile = useCallback((x: number, y: number) => {
     setLayers(prev => prev.map(layer => {
       if (layer.id !== activeLayerId) return layer
-
       if (layer.mode === 'tilemap') {
         const nextData = [...layer.tileData]
         if (activeTool === 'eraser') {
@@ -261,7 +249,6 @@ export function useTileEditor() {
             nextData[y][x] = null
           }
         } else if (selection) {
-          // Multi-tile stamp
           for (let sy = 0; sy < selection.h; sy++) {
             for (let sx = 0; sx < selection.w; sx++) {
               const targetY = y + sy
@@ -305,7 +292,6 @@ export function useTileEditor() {
           const pxX = x * tileSize.width
           const pxY = y * tileSize.height
           const factor = scaleDirection === 'up' ? 1.1 : 0.9
-          // Scale the first object hit at this position
           return {
             ...layer,
             objects: layer.objects.map(obj => {
@@ -347,10 +333,13 @@ export function useTileEditor() {
       if (id === activeLayerId) {
         setActiveLayerId(nextLayers[0].id)
       }
+      if (id === splitLayerId) {
+        setSplitLayerId(null)
+      }
       pushHistory(nextLayers)
       return nextLayers
     })
-  }, [activeLayerId, pushHistory])
+  }, [activeLayerId, splitLayerId, pushHistory])
 
   const toggleLayerVisibility = useCallback((id: string) => {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l))
@@ -394,12 +383,10 @@ export function useTileEditor() {
     if (project.tileSize) setTileSize(project.tileSize)
     if (project.canvasSize) setCanvasSize(project.canvasSize)
     if (project.activeLayerId) setActiveLayerId(project.activeLayerId)
+    if (project.splitLayerId) setSplitLayerId(project.splitLayerId)
     if (project.backgroundImage) setBackgroundImage(project.backgroundImage)
     if (project.backgroundOpacity) setBackgroundOpacity(project.backgroundOpacity)
-    
-    if (project.layers) {
-      pushHistory(project.layers)
-    }
+    if (project.layers) pushHistory(project.layers)
   }, [pushHistory])
 
   return {
@@ -413,12 +400,12 @@ export function useTileEditor() {
     canvasSize, setCanvasSize,
     zoom, setZoom,
     layers, setLayers, activeLayerId, setActiveLayerId,
+    splitLayerId, setSplitLayerId,
     addLayer, deleteLayer, toggleLayerVisibility, toggleLayerMode, renameLayer, reorderLayer,
     paintTile, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
     importProject,
-    // Undo/Redo
     undo, redo, pushHistory,
     canUndo: historyIndex > 0,
     canRedo: historyIndex < history.length - 1
