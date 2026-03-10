@@ -132,7 +132,10 @@ export function TileCanvas({
                             }}
                           >
                             {cell.comment && (
-                              <div className="absolute top-0.5 right-0.5 bg-primary rounded-full p-0.5 shadow-sm">
+                              <div 
+                                className="absolute top-0.5 right-0.5 rounded-full p-0.5 shadow-sm"
+                                style={{ backgroundColor: cell.commentColor || 'var(--primary)' }}
+                              >
                                 <MessageSquare size={8} className="text-white" />
                               </div>
                             )}

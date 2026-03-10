@@ -67,6 +67,15 @@ import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
+const COMMENT_COLORS = [
+  { name: 'Blue', value: '#3b82f6' },
+  { name: 'Red', value: '#ef4444' },
+  { name: 'Green', value: '#10b981' },
+  { name: 'Orange', value: '#f59e0b' },
+  { name: 'Purple', value: '#8b5cf6' },
+  { name: 'Black', value: '#000000' },
+]
+
 export default function TileForge() {
   const {
     tilesets, addTileset,
@@ -106,6 +115,7 @@ export default function TileForge() {
   // Comment logic
   const [isCommentDialogOpen, setIsCommentDialogOpen] = useState(false)
   const [commentText, setCommentText] = useState("")
+  const [commentColor, setCommentColor] = useState(COMMENT_COLORS[0].value)
   const [commentArea, setCommentArea] = useState<{ x: number, y: number, w: number, h: number } | null>(null)
 
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
@@ -520,7 +530,7 @@ export default function TileForge() {
 
   const handleSaveComment = () => {
     if (commentArea) {
-      setTileComment(commentArea.x, commentArea.y, commentArea.w, commentArea.h, commentText)
+      setTileComment(commentArea.x, commentArea.y, commentArea.w, commentArea.h, commentText, commentColor)
       setIsCommentDialogOpen(false)
       setCommentArea(null)
       toast({
@@ -986,15 +996,44 @@ export default function TileForge() {
               Provide a note for the selected {commentArea ? (commentArea.w * commentArea.h) : 0} tile(s). This will be included in the release metadata.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="comment-text" className="mb-2 block">Comment</Label>
-            <Textarea 
-              id="comment-text"
-              placeholder="e.g., Collision trigger, Player spawn..."
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              className="min-h-[100px]"
-            />
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label className="block">Icon Color</Label>
+              <div className="flex flex-wrap gap-2 items-center">
+                {COMMENT_COLORS.map(color => (
+                  <button
+                    key={color.value}
+                    className={cn(
+                      "w-8 h-8 rounded-full border-2 transition-all hover:scale-105",
+                      commentColor === color.value ? "border-primary scale-110 shadow-md ring-2 ring-primary/20" : "border-transparent"
+                    )}
+                    style={{ backgroundColor: color.value }}
+                    onClick={() => setCommentColor(color.value)}
+                    title={color.name}
+                  />
+                ))}
+                <div className="flex items-center gap-2 pl-2 border-l">
+                  <Input 
+                    type="color" 
+                    value={commentColor} 
+                    onChange={(e) => setCommentColor(e.target.value)}
+                    className="w-10 h-8 p-0 border-none cursor-pointer"
+                  />
+                  <span className="text-[10px] text-muted-foreground font-mono uppercase">{commentColor}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="comment-text" className="block">Comment</Label>
+              <Textarea 
+                id="comment-text"
+                placeholder="e.g., Collision trigger, Player spawn..."
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCommentDialogOpen(false)}>Cancel</Button>

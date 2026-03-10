@@ -15,6 +15,7 @@ export type TilePosition = {
   ty: number
   tilesetId: string
   comment?: string
+  commentColor?: string
 }
 
 export type PlacedObject = {
@@ -312,7 +313,7 @@ export function useTileEditor() {
     }))
   }, [selection, activeTool, activeLayerId, selectedComponentId, components, tileSize, canvasSize, scaleDirection])
 
-  const setTileComment = useCallback((x: number, y: number, w: number, h: number, comment: string) => {
+  const setTileComment = useCallback((x: number, y: number, w: number, h: number, comment: string, color?: string) => {
     setLayers(prev => {
       const next = prev.map(layer => {
         if (layer.id !== activeLayerId || layer.mode !== 'tilemap') return layer
@@ -323,7 +324,11 @@ export function useTileEditor() {
             const tx = x + dx
             if (nextData[ty] && nextData[ty][tx]) {
               nextData[ty] = [...nextData[ty]]
-              nextData[ty][tx] = { ...nextData[ty][tx]!, comment: comment || undefined }
+              nextData[ty][tx] = { 
+                ...nextData[ty][tx]!, 
+                comment: comment || undefined,
+                commentColor: color || undefined
+              }
             }
           }
         }
