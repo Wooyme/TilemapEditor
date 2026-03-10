@@ -116,6 +116,7 @@ export default function TileForge() {
 
   const [isReleaseDialogOpen, setIsReleaseDialogOpen] = useState(false)
   const [exportScale, setExportScale] = useState('1')
+  const [exportSmoothing, setExportSmoothing] = useState(false)
 
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
@@ -166,16 +167,16 @@ export default function TileForge() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [tilesets.length, components.length, layers])
 
-  const compositeLayers = async (layersToComposite: Layer[], scale: number = 1): Promise<HTMLCanvasElement> => {
+  const compositeLayers = async (layersToComposite: Layer[], scale: number = 1, smoothing: boolean = false): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas')
-    const mapWidth = canvasSize.width * tileSize.width * scale
-    const mapHeight = canvasSize.height * tileSize.height * scale
+    const mapWidth = Math.round(canvasSize.width * tileSize.width * scale)
+    const mapHeight = Math.round(canvasSize.height * tileSize.height * scale)
     canvas.width = mapWidth
     canvas.height = mapHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error("Could not initialize canvas context")
 
-    ctx.imageSmoothingEnabled = false
+    ctx.imageSmoothingEnabled = smoothing
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
     const loadImage = (url: string): Promise<HTMLImageElement> => {
@@ -298,8 +299,8 @@ export default function TileForge() {
 
     try {
       const dirHandle = await (window as any).showDirectoryPicker();
-      const mapWidth = canvasSize.width * tileSize.width * scaleFactor
-      const mapHeight = canvasSize.height * tileSize.height * scaleFactor
+      const mapWidth = Math.round(canvasSize.width * tileSize.width * scaleFactor)
+      const mapHeight = Math.round(canvasSize.height * tileSize.height * scaleFactor)
 
       const loadImage = (url: string): Promise<HTMLImageElement> => {
         return new Promise((resolve, reject) => {
@@ -311,15 +312,15 @@ export default function TileForge() {
         })
       }
 
-      // 1. Export Tilesets as PNG files (scaled if necessary)
+      // 1. Export Tilesets as PNG files
       const tilesetExportData = await Promise.all(tilesets.map(async (ts) => {
         const img = await loadImage(ts.url)
         const canvas = document.createElement('canvas')
-        canvas.width = img.width * scaleFactor
-        canvas.height = img.height * scaleFactor
+        canvas.width = Math.round(img.width * scaleFactor)
+        canvas.height = Math.round(img.height * scaleFactor)
         const ctx = canvas.getContext('2d')
         if (!ctx) throw new Error("Canvas context fail")
-        ctx.imageSmoothingEnabled = false
+        ctx.imageSmoothingEnabled = exportSmoothing
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
         
         const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'))
@@ -358,7 +359,7 @@ export default function TileForge() {
           canvas.height = mapHeight
           const ctx = canvas.getContext('2d')
           if (!ctx) throw new Error("Canvas context failed")
-          ctx.imageSmoothingEnabled = false
+          ctx.imageSmoothingEnabled = exportSmoothing
 
           layer.objects.forEach(obj => {
             const img = componentCache.get(obj.componentId)
@@ -393,7 +394,7 @@ export default function TileForge() {
 
           // Background Composite
           if (backgroundLayers.length > 0) {
-            const bgCanvas = await compositeLayers(backgroundLayers, scaleFactor)
+            const bgCanvas = await compositeLayers(backgroundLayers, scaleFactor, exportSmoothing)
             const bgBlob = await new Promise<Blob>((resolve) => bgCanvas.toBlob((b) => resolve(b!), 'image/png'))
             const bgHandle = await dirHandle.getFileHandle('background-composite.png', { create: true })
             const bgWritable = await bgHandle.createWritable()
@@ -403,7 +404,7 @@ export default function TileForge() {
 
           // Foreground Composite
           if (foregroundLayers.length > 0) {
-            const fgCanvas = await compositeLayers(foregroundLayers, scaleFactor)
+            const fgCanvas = await compositeLayers(foregroundLayers, scaleFactor, exportSmoothing)
             const fgBlob = await new Promise<Blob>((resolve) => fgCanvas.toBlob((b) => resolve(b!), 'image/png'))
             const fgHandle = await dirHandle.getFileHandle('foreground-composite.png', { create: true })
             const fgWritable = await fgHandle.createWritable()
@@ -424,6 +425,7 @@ export default function TileForge() {
         version: "1.2-release",
         name: "TileForge Project Release",
         scale: scaleFactor,
+        smoothing: exportSmoothing,
         canvasSize,
         tileSize: {
           width: tileSize.width * scaleFactor,
@@ -1026,23 +1028,39 @@ export default function TileForge() {
 
       {/* Release Export Scale Dialog */}
       <Dialog open={isReleaseDialogOpen} onOpenChange={setIsReleaseDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Release Settings</DialogTitle>
             <DialogDescription>
-              Choose the export scale for your release package. All assets and baked layers will be resized.
+              Choose the export scale and scaling algorithm for your release package.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-6 space-y-4">
-            <Label className="text-xs uppercase text-muted-foreground font-bold">Export Scale</Label>
-            <RadioGroup value={exportScale} onValueChange={setExportScale} className="grid grid-cols-2 gap-4">
-              {EXPORT_SCALES.map((scale) => (
-                <div key={scale.value} className="flex items-center space-x-2 border p-3 rounded-md hover:bg-secondary/20 transition-colors">
-                  <RadioGroupItem value={scale.value} id={`scale-${scale.value}`} />
-                  <Label htmlFor={`scale-${scale.value}`} className="flex-1 cursor-pointer font-medium">{scale.label}</Label>
+          <div className="py-6 space-y-6">
+            <div className="space-y-3">
+              <Label className="text-xs uppercase text-muted-foreground font-bold">Export Scale</Label>
+              <RadioGroup value={exportScale} onValueChange={setExportScale} className="grid grid-cols-2 gap-3">
+                {EXPORT_SCALES.map((scale) => (
+                  <div key={scale.value} className="flex items-center space-x-2 border p-2.5 rounded-md hover:bg-secondary/20 transition-colors">
+                    <RadioGroupItem value={scale.value} id={`scale-${scale.value}`} />
+                    <Label htmlFor={`scale-${scale.value}`} className="flex-1 cursor-pointer text-sm font-medium">{scale.label}</Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-xs uppercase text-muted-foreground font-bold">Scaling Algorithm</Label>
+              <RadioGroup value={exportSmoothing ? 'simple' : 'nearest'} onValueChange={(v) => setExportSmoothing(v === 'simple')} className="grid grid-cols-1 gap-3">
+                <div className="flex items-center space-x-2 border p-2.5 rounded-md hover:bg-secondary/20 transition-colors">
+                  <RadioGroupItem value="nearest" id="algo-nearest" />
+                  <Label htmlFor="algo-nearest" className="flex-1 cursor-pointer text-sm font-medium">Nearest Neighbor (Crisp Pixel Art)</Label>
                 </div>
-              ))}
-            </RadioGroup>
+                <div className="flex items-center space-x-2 border p-2.5 rounded-md hover:bg-secondary/20 transition-colors">
+                  <RadioGroupItem value="simple" id="algo-simple" />
+                  <Label htmlFor="algo-simple" className="flex-1 cursor-pointer text-sm font-medium">Simple / Smooth (Bilinear)</Label>
+                </div>
+              </RadioGroup>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsReleaseDialogOpen(false)}>Cancel</Button>
