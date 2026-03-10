@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, useEffect, useCallback } from 'react'
@@ -76,6 +77,13 @@ const COMMENT_COLORS = [
   { name: 'Black', value: '#000000' },
 ]
 
+const EXPORT_SCALES = [
+  { label: '0.5x', value: '0.5' },
+  { label: '1x (Original)', value: '1' },
+  { label: '2x', value: '2' },
+  { label: '4x', value: '4' },
+]
+
 export default function TileForge() {
   const {
     tilesets, addTileset,
@@ -106,6 +114,9 @@ export default function TileForge() {
   
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+
+  const [isReleaseDialogOpen, setIsReleaseDialogOpen] = useState(false)
+  const [exportScale, setExportScale] = useState('1')
 
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
@@ -156,13 +167,16 @@ export default function TileForge() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [tilesets.length, components.length, layers])
 
-  const compositeLayers = async (layersToComposite: Layer[]): Promise<HTMLCanvasElement> => {
+  const compositeLayers = async (layersToComposite: Layer[], scale: number = 1): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas')
-    canvas.width = canvasSize.width * tileSize.width
-    canvas.height = canvasSize.height * tileSize.height
+    const mapWidth = canvasSize.width * tileSize.width * scale
+    const mapHeight = canvasSize.height * tileSize.height * scale
+    canvas.width = mapWidth
+    canvas.height = mapHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error("Could not initialize canvas context")
 
+    ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
     const loadImage = (url: string): Promise<HTMLImageElement> => {
@@ -200,7 +214,7 @@ export default function TileForge() {
             ctx.drawImage(
               img,
               cell.tx * tileSize.width, cell.ty * tileSize.height, tileSize.width, tileSize.height,
-              x * tileSize.width, y * tileSize.height, tileSize.width, tileSize.height
+              x * tileSize.width * scale, y * tileSize.height * scale, tileSize.width * scale, tileSize.height * scale
             )
           })
         })
@@ -208,7 +222,13 @@ export default function TileForge() {
         layer.objects.forEach((obj) => {
           const img = componentCache.get(obj.componentId)
           if (!img) return
-          ctx.drawImage(img, obj.x, obj.y, obj.width, obj.height)
+          ctx.drawImage(
+            img, 
+            obj.x * scale, 
+            obj.y * scale, 
+            obj.width * scale, 
+            obj.height * scale
+          )
         })
       }
     }
@@ -274,10 +294,13 @@ export default function TileForge() {
     }
 
     setIsReleasing(true)
+    setIsReleaseDialogOpen(false)
+    const scaleFactor = parseFloat(exportScale)
+
     try {
       const dirHandle = await (window as any).showDirectoryPicker();
-      const mapWidth = canvasSize.width * tileSize.width
-      const mapHeight = canvasSize.height * tileSize.height
+      const mapWidth = canvasSize.width * tileSize.width * scaleFactor
+      const mapHeight = canvasSize.height * tileSize.height * scaleFactor
 
       const loadImage = (url: string): Promise<HTMLImageElement> => {
         return new Promise((resolve, reject) => {
@@ -289,10 +312,18 @@ export default function TileForge() {
         })
       }
 
-      // 1. Export Tilesets as PNG files
+      // 1. Export Tilesets as PNG files (scaled if necessary)
       const tilesetExportData = await Promise.all(tilesets.map(async (ts) => {
-        const response = await fetch(ts.url)
-        const blob = await response.blob()
+        const img = await loadImage(ts.url)
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width * scaleFactor
+        canvas.height = img.height * scaleFactor
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error("Canvas context fail")
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        
+        const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'))
         const fileName = `tileset-${ts.id}.png`
         const fileHandle = await dirHandle.getFileHandle(fileName, { create: true })
         const writable = await fileHandle.createWritable()
@@ -301,7 +332,9 @@ export default function TileForge() {
         return {
           id: ts.id,
           name: ts.name,
-          imagePath: fileName
+          imagePath: fileName,
+          width: canvas.width,
+          height: canvas.height
         }
       }))
 
@@ -326,11 +359,12 @@ export default function TileForge() {
           canvas.height = mapHeight
           const ctx = canvas.getContext('2d')
           if (!ctx) throw new Error("Canvas context failed")
+          ctx.imageSmoothingEnabled = false
 
           layer.objects.forEach(obj => {
             const img = componentCache.get(obj.componentId)
             if (!img) return
-            ctx.drawImage(img, obj.x, obj.y, obj.width, obj.height)
+            ctx.drawImage(img, obj.x * scaleFactor, obj.y * scaleFactor, obj.width * scaleFactor, obj.height * scaleFactor)
           })
 
           const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'))
@@ -360,7 +394,7 @@ export default function TileForge() {
 
           // Background Composite
           if (backgroundLayers.length > 0) {
-            const bgCanvas = await compositeLayers(backgroundLayers)
+            const bgCanvas = await compositeLayers(backgroundLayers, scaleFactor)
             const bgBlob = await new Promise<Blob>((resolve) => bgCanvas.toBlob((b) => resolve(b!), 'image/png'))
             const bgHandle = await dirHandle.getFileHandle('background-composite.png', { create: true })
             const bgWritable = await bgHandle.createWritable()
@@ -370,7 +404,7 @@ export default function TileForge() {
 
           // Foreground Composite
           if (foregroundLayers.length > 0) {
-            const fgCanvas = await compositeLayers(foregroundLayers)
+            const fgCanvas = await compositeLayers(foregroundLayers, scaleFactor)
             const fgBlob = await new Promise<Blob>((resolve) => fgCanvas.toBlob((b) => resolve(b!), 'image/png'))
             const fgHandle = await dirHandle.getFileHandle('foreground-composite.png', { create: true })
             const fgWritable = await fgHandle.createWritable()
@@ -388,10 +422,14 @@ export default function TileForge() {
 
       // 4. Export release.json
       const releasePackage = {
-        version: "1.1-release",
+        version: "1.2-release",
         name: "TileForge Project Release",
+        scale: scaleFactor,
         canvasSize,
-        tileSize,
+        tileSize: {
+          width: tileSize.width * scaleFactor,
+          height: tileSize.height * scaleFactor
+        },
         tilesets: tilesetExportData,
         layers: releaseLayers,
         split: splitData
@@ -404,7 +442,7 @@ export default function TileForge() {
 
       toast({
         title: "Release Successful",
-        description: "All files have been written to the selected directory.",
+        description: `Project released at ${exportScale}x scale.`,
       })
     } catch (error: any) {
       if (error.name === 'AbortError') return 
@@ -951,7 +989,7 @@ export default function TileForge() {
                 variant="outline"
                 size="sm" 
                 className="h-8 shadow-sm" 
-                onClick={handleExportRelease}
+                onClick={() => setIsReleaseDialogOpen(true)}
                 disabled={isReleasing}
                >
                   {isReleasing ? <Loader2 className="mr-2 animate-spin" /> : <Rocket className="mr-2" />}
@@ -986,6 +1024,33 @@ export default function TileForge() {
           onCommentSelected={handleCommentSelected}
         />
       </main>
+
+      {/* Release Export Scale Dialog */}
+      <Dialog open={isReleaseDialogOpen} onOpenChange={setIsReleaseDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Release Settings</DialogTitle>
+            <DialogDescription>
+              Choose the export scale for your release package. All assets and baked layers will be resized.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6 space-y-4">
+            <Label className="text-xs uppercase text-muted-foreground font-bold">Export Scale</Label>
+            <RadioGroup value={exportScale} onValueChange={setExportScale} className="grid grid-cols-2 gap-4">
+              {EXPORT_SCALES.map((scale) => (
+                <div key={scale.value} className="flex items-center space-x-2 border p-3 rounded-md hover:bg-secondary/20 transition-colors">
+                  <RadioGroupItem value={scale.value} id={`scale-${scale.value}`} />
+                  <Label htmlFor={`scale-${scale.value}`} className="flex-1 cursor-pointer font-medium">{scale.label}</Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReleaseDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleExportRelease}>Select Folder & Export</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Comment Dialog */}
       <Dialog open={isCommentDialogOpen} onOpenChange={setIsCommentDialogOpen}>
