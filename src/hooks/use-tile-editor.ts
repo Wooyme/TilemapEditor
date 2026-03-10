@@ -14,6 +14,7 @@ export type TilePosition = {
   tx: number
   ty: number
   tilesetId: string
+  comment?: string
 }
 
 export type PlacedObject = {
@@ -48,7 +49,7 @@ export type Layer = {
   objects: PlacedObject[] // For object mode
 }
 
-export type Tool = 'paint' | 'eraser' | 'select' | 'scale'
+export type Tool = 'paint' | 'eraser' | 'select' | 'scale' | 'comment'
 
 export type ScaleDirection = 'up' | 'down'
 
@@ -248,7 +249,7 @@ export function useTileEditor() {
             nextData[y] = [...nextData[y]]
             nextData[y][x] = null
           }
-        } else if (selection) {
+        } else if (activeTool === 'paint' && selection) {
           for (let sy = 0; sy < selection.h; sy++) {
             for (let sx = 0; sx < selection.w; sx++) {
               const targetY = y + sy
@@ -310,6 +311,28 @@ export function useTileEditor() {
       return layer
     }))
   }, [selection, activeTool, activeLayerId, selectedComponentId, components, tileSize, canvasSize, scaleDirection])
+
+  const setTileComment = useCallback((x: number, y: number, w: number, h: number, comment: string) => {
+    setLayers(prev => {
+      const next = prev.map(layer => {
+        if (layer.id !== activeLayerId || layer.mode !== 'tilemap') return layer
+        const nextData = [...layer.tileData]
+        for (let dy = 0; dy < h; dy++) {
+          for (let dx = 0; dx < w; dx++) {
+            const ty = y + dy
+            const tx = x + dx
+            if (nextData[ty] && nextData[ty][tx]) {
+              nextData[ty] = [...nextData[ty]]
+              nextData[ty][tx] = { ...nextData[ty][tx]!, comment: comment || undefined }
+            }
+          }
+        }
+        return { ...layer, tileData: nextData }
+      })
+      pushHistory(next)
+      return next
+    })
+  }, [activeLayerId, pushHistory])
 
   const addLayer = useCallback(() => {
     const newLayer: Layer = {
@@ -402,7 +425,7 @@ export function useTileEditor() {
     layers, setLayers, activeLayerId, setActiveLayerId,
     splitLayerId, setSplitLayerId,
     addLayer, deleteLayer, toggleLayerVisibility, toggleLayerMode, renameLayer, reorderLayer,
-    paintTile, activeTool, setActiveTool,
+    paintTile, setTileComment, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
     importProject,

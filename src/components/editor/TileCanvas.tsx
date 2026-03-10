@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Layer, Tileset, ComponentAsset, TileSelection } from '@/hooks/use-tile-editor'
 import { cn } from '@/lib/utils'
+import { MessageSquare } from 'lucide-react'
 
 interface TileCanvasProps {
   layers: Layer[]
@@ -13,10 +14,11 @@ interface TileCanvasProps {
   tileSize: { width: number; height: number }
   zoom: number
   onPaint: (x: number, y: number) => void
-  activeTool: 'paint' | 'eraser' | 'select' | 'scale'
+  activeTool: 'paint' | 'eraser' | 'select' | 'scale' | 'comment'
   selection: TileSelection | null
   selectedComponentId: string | null
   onFinishAction?: () => void
+  onCommentSelected?: (x: number, y: number, w: number, h: number) => void
 }
 
 export function TileCanvas({ 
@@ -31,31 +33,52 @@ export function TileCanvas({
   activeTool, 
   selection,
   selectedComponentId,
-  onFinishAction
+  onFinishAction,
+  onCommentSelected
 }: TileCanvasProps) {
   const [isMouseDown, setIsMouseDown] = useState(false)
   const [hoverPos, setHoverPos] = useState<{ x: number, y: number } | null>(null)
   
+  const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null)
+  const [dragEnd, setDragEnd] = useState<{ x: number, y: number } | null>(null)
+
   const handleMouseMove = (x: number, y: number) => {
     setHoverPos({ x, y })
-    if (isMouseDown) onPaint(x, y)
+    if (activeTool === 'comment' && dragStart) {
+      setDragEnd({ x, y })
+    } else if (isMouseDown) {
+      onPaint(x, y)
+    }
   }
 
   const handleMouseDown = (x: number, y: number) => {
     setIsMouseDown(true)
-    onPaint(x, y)
+    if (activeTool === 'comment') {
+      setDragStart({ x, y })
+      setDragEnd({ x, y })
+    } else {
+      onPaint(x, y)
+    }
   }
 
   useEffect(() => {
     const up = () => {
-      if (isMouseDown && onFinishAction) {
+      if (activeTool === 'comment' && dragStart && dragEnd && onCommentSelected) {
+        const x = Math.min(dragStart.x, dragEnd.x)
+        const y = Math.min(dragStart.y, dragEnd.y)
+        const w = Math.abs(dragStart.x - dragEnd.x) + 1
+        const h = Math.abs(dragStart.y - dragEnd.y) + 1
+        onCommentSelected(x, y, w, h)
+      } else if (isMouseDown && onFinishAction) {
         onFinishAction()
       }
       setIsMouseDown(false)
+      setDragStart(null)
+      setDragEnd(null)
     }
     window.addEventListener('mouseup', up)
     return () => window.removeEventListener('mouseup', up)
-  }, [isMouseDown, onFinishAction])
+  }, [isMouseDown, dragStart, dragEnd, activeTool, onFinishAction, onCommentSelected])
 
   const activeLayer = layers.find(l => l.id === activeLayerId)
   const baseWidth = canvasSize.width * tileSize.width
@@ -107,7 +130,13 @@ export function TileCanvas({
                               backgroundSize: `${ts.width}px ${ts.height}px`,
                               imageRendering: 'pixelated'
                             }}
-                          />
+                          >
+                            {cell.comment && (
+                              <div className="absolute top-0.5 right-0.5 bg-primary rounded-full p-0.5 shadow-sm">
+                                <MessageSquare size={8} className="text-white" />
+                              </div>
+                            )}
+                          </div>
                         )
                       })
                     )
@@ -136,6 +165,19 @@ export function TileCanvas({
               )
             })}
           </div>
+
+          {/* Comment Selection Rect */}
+          {activeTool === 'comment' && dragStart && dragEnd && (
+            <div 
+              className="absolute border-2 border-primary bg-primary/10 z-[80] pointer-events-none"
+              style={{
+                left: Math.min(dragStart.x, dragEnd.x) * tileSize.width,
+                top: Math.min(dragStart.y, dragEnd.y) * tileSize.height,
+                width: (Math.abs(dragStart.x - dragEnd.x) + 1) * tileSize.width,
+                height: (Math.abs(dragStart.y - dragEnd.y) + 1) * tileSize.height,
+              }}
+            />
+          )}
 
           {/* Interaction Overlay */}
           <div 

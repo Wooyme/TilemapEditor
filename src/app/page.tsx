@@ -11,12 +11,14 @@ import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Textarea } from '@/components/ui/textarea'
 import { 
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription
+  DialogDescription,
+  DialogFooter
 } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -58,7 +60,8 @@ import {
   Trash2,
   Undo2,
   Redo2,
-  SeparatorHorizontal
+  SeparatorHorizontal,
+  MessageSquare
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -78,7 +81,7 @@ export default function TileForge() {
     layers, activeLayerId, setActiveLayerId,
     splitLayerId, setSplitLayerId,
     addLayer, deleteLayer, toggleLayerVisibility, toggleLayerMode, renameLayer, reorderLayer,
-    paintTile, activeTool, setActiveTool,
+    paintTile, setTileComment, activeTool, setActiveTool,
     scaleDirection, setScaleDirection,
     backgroundImage, setBackgroundImage,
     backgroundOpacity, setBackgroundOpacity,
@@ -99,6 +102,11 @@ export default function TileForge() {
   const [editName, setEditName] = useState("")
 
   const [layerToDelete, setLayerToDelete] = useState<string | null>(null)
+
+  // Comment logic
+  const [isCommentDialogOpen, setIsCommentDialogOpen] = useState(false)
+  const [commentText, setCommentText] = useState("")
+  const [commentArea, setCommentArea] = useState<{ x: number, y: number, w: number, h: number } | null>(null)
 
   const currentTileset = tilesets.find(t => t.id === selectedTilesetId)
   const activeLayer = layers.find(l => l.id === activeLayerId)
@@ -504,6 +512,24 @@ export default function TileForge() {
     }
   }
 
+  const handleCommentSelected = (x: number, y: number, w: number, h: number) => {
+    setCommentArea({ x, y, w, h })
+    setCommentText("")
+    setIsCommentDialogOpen(true)
+  }
+
+  const handleSaveComment = () => {
+    if (commentArea) {
+      setTileComment(commentArea.x, commentArea.y, commentArea.w, commentArea.h, commentText)
+      setIsCommentDialogOpen(false)
+      setCommentArea(null)
+      toast({
+        title: "Comment Added",
+        description: `Comment applied to selected region.`,
+      })
+    }
+  }
+
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden font-body text-foreground">
       {/* Left Sidebar */}
@@ -551,6 +577,16 @@ export default function TileForge() {
                 onClick={() => setActiveTool('eraser')}
               >
                 <Eraser size={14} className="mr-2" /> Eraser
+              </Button>
+              <Button 
+                variant={activeTool === 'comment' ? 'default' : 'outline'} 
+                size="sm"
+                className="col-span-2"
+                onClick={() => setActiveTool('comment')}
+                disabled={activeLayer?.mode !== 'tilemap'}
+                title={activeLayer?.mode !== 'tilemap' ? "Comments only available for Tilemap layers" : "Annotate Tiles"}
+              >
+                <MessageSquare size={14} className="mr-2" /> Comment Tool
               </Button>
               <Button 
                 variant={activeTool === 'scale' ? 'default' : 'outline'} 
@@ -937,8 +973,35 @@ export default function TileForge() {
           selection={selection}
           selectedComponentId={selectedComponentId}
           onFinishAction={() => pushHistory(layers)}
+          onCommentSelected={handleCommentSelected}
         />
       </main>
+
+      {/* Comment Dialog */}
+      <Dialog open={isCommentDialogOpen} onOpenChange={setIsCommentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Comment to Tiles</DialogTitle>
+            <DialogDescription>
+              Provide a note for the selected {commentArea ? (commentArea.w * commentArea.h) : 0} tile(s). This will be included in the release metadata.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="comment-text" className="mb-2 block">Comment</Label>
+            <Textarea 
+              id="comment-text"
+              placeholder="e.g., Collision trigger, Player spawn..."
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              className="min-h-[100px]"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCommentDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveComment}>Save Comment</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Layer Delete Confirmation */}
       <AlertDialog open={layerToDelete !== null} onOpenChange={(open) => !open && setLayerToDelete(null)}>
