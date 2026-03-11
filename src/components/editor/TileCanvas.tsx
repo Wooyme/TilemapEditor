@@ -19,6 +19,7 @@ interface TileCanvasProps {
   selectedComponentId: string | null
   onFinishAction?: () => void
   onCommentSelected?: (x: number, y: number, w: number, h: number) => void
+  isHighlightActive?: boolean
 }
 
 export function TileCanvas({ 
@@ -34,7 +35,8 @@ export function TileCanvas({
   selection,
   selectedComponentId,
   onFinishAction,
-  onCommentSelected
+  onCommentSelected,
+  isHighlightActive = false
 }: TileCanvasProps) {
   const [isMouseDown, setIsMouseDown] = useState(false)
   const [hoverPos, setHoverPos] = useState<{ x: number, y: number } | null>(null)
@@ -108,8 +110,10 @@ export function TileCanvas({
           <div className="absolute inset-0 pointer-events-none">
             {[...layers].reverse().map((layer) => {
               if (!layer.visible) return null
+              const isLayerActive = layer.id === activeLayerId
+
               return (
-                <div key={layer.id} className={cn("absolute inset-0", layer.id !== activeLayerId && "opacity-60")}>
+                <div key={layer.id} className={cn("absolute inset-0", !isLayerActive && "opacity-60")}>
                   {layer.mode === 'tilemap' ? (
                     layer.tileData.map((row, y) => 
                       row.map((cell, x) => {
@@ -119,7 +123,10 @@ export function TileCanvas({
                         return (
                           <div
                             key={`${layer.id}-${x}-${y}`}
-                            className="absolute"
+                            className={cn(
+                              "absolute",
+                              isHighlightActive && isLayerActive && "ring-1 ring-primary ring-inset z-10"
+                            )}
                             style={{
                               left: x * tileSize.width,
                               top: y * tileSize.height,
@@ -151,7 +158,10 @@ export function TileCanvas({
                         <img
                           key={obj.id}
                           src={comp.url}
-                          className="absolute pointer-events-none"
+                          className={cn(
+                            "absolute pointer-events-none",
+                            isHighlightActive && isLayerActive && "ring-2 ring-primary ring-offset-1 z-10"
+                          )}
                           style={{
                             left: obj.x,
                             top: obj.y,

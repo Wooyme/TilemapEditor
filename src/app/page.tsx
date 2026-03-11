@@ -61,7 +61,8 @@ import {
   Undo2,
   Redo2,
   SeparatorHorizontal,
-  MessageSquare
+  MessageSquare,
+  Focus
 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/hooks/use-toast'
@@ -122,6 +123,9 @@ export default function TileForge() {
   const [editName, setEditName] = useState("")
 
   const [layerToDelete, setLayerToDelete] = useState<string | null>(null)
+
+  // Highlight logic
+  const [isHighlightActive, setIsHighlightActive] = useState(false)
 
   // Comment logic
   const [isCommentDialogOpen, setIsCommentDialogOpen] = useState(false)
@@ -968,6 +972,20 @@ export default function TileForge() {
 
           <div className="flex items-center gap-3 shrink-0 ml-4">
              <div className="flex items-center gap-2 border-r pr-3">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase">Highlight</Label>
+                <Button 
+                  variant={isHighlightActive ? "default" : "outline"} 
+                  size="sm" 
+                  className="h-8 shadow-sm"
+                  onClick={() => setIsHighlightActive(!isHighlightActive)}
+                  title="Toggle Active Layer Highlight"
+                >
+                  <Focus size={16} className={cn("mr-2", isHighlightActive ? "animate-pulse" : "")} />
+                  Focus
+                </Button>
+             </div>
+
+             <div className="flex items-center gap-2 border-r pr-3">
                 <Label className="text-[10px] font-semibold text-muted-foreground uppercase">Zoom</Label>
                 <div className="flex items-center gap-2 bg-secondary/20 p-1 px-2 rounded-md border">
                   <Slider className="w-20" value={[zoom]} min={0.25} max={4} step={0.1} onValueChange={([v]) => setZoom(v)} />
@@ -1023,6 +1041,7 @@ export default function TileForge() {
           selectedComponentId={selectedComponentId}
           onFinishAction={() => pushHistory(layers)}
           onCommentSelected={handleCommentSelected}
+          isHighlightActive={isHighlightActive}
         />
       </main>
 
